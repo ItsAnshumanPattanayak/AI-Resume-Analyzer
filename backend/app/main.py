@@ -9,6 +9,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.advisor import analyze_resume_quality
 from app.ats import calculate_ats_score
 from app.extractor import extract_resume_information
 from app.parser import SUPPORTED_EXTENSIONS, extract_resume_text
@@ -29,9 +30,9 @@ app = FastAPI(
     description=(
         "Backend API for parsing resumes, calculating ATS scores, "
         "matching job descriptions, recommending job roles, "
-        "and generating resume recommendations."
+        "and generating resume improvement suggestions."
     ),
-    version="1.0.0",
+    version="1.1.0",
 )
 
 
@@ -121,7 +122,7 @@ def home() -> dict:
     return {
         "message": "AI Resume Analyzer API is running.",
         "documentation": "/docs",
-        "version": "1.0.0",
+        "version": "1.1.0",
     }
 
 
@@ -214,6 +215,7 @@ async def analyze_resume(
     - Combined content similarity
     - ATS compatibility scoring
     - Job-role recommendations
+    - Resume quality analysis
     """
 
     try:
@@ -250,6 +252,12 @@ async def analyze_resume(
                     cleaned_job_description
                 ),
             )
+        )
+
+        resume_quality = analyze_resume_quality(
+            resume_text=extracted_text,
+            parsed_data=parsed_data,
+            skill_comparison=skill_comparison,
         )
 
         tfidf_similarity = (
@@ -322,6 +330,7 @@ async def analyze_resume(
             "job_role_recommendations": (
                 role_recommendations
             ),
+            "resume_improvement": resume_quality,
             "ats": ats_result,
         }
 
@@ -407,6 +416,82 @@ async def recommend_roles(
                 "skills": parsed_data.get("skills"),
             },
             "recommendations": recommendations,
+        }
+
+    except HTTPException:
+        raise
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422,
+            detail=str(error),
+        ) from error
+
+    except RuntimeError as error:
+        raise HTTPException(
+            status_code=500,
+            detail=str(error),
+        ) from error
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "An unexpected error occurred: "
+                f"{error}"
+            ),
+        ) from error
+
+    finally:
+        await file.close()
+
+
+@app.post("/api/resume/improve")
+async def improve_resume(
+    file: UploadFile = File(...),
+) -> dict:
+    """
+    Analyze resume-writing quality and provide improvement advice.
+
+    A job description is not required for this endpoint.
+    """
+
+    try:
+        file_bytes, extracted_text = (
+            await read_and_validate_resume(file)
+        )
+
+        parsed_data = extract_resume_information(
+            extracted_text
+        )
+
+        improvement_result = analyze_resume_quality(
+            resume_text=extracted_text,
+            parsed_data=parsed_data,
+        )
+
+        return {
+            "success": True,
+            "filename": file.filename,
+            "content_type": file.content_type,
+            "file_size_bytes": len(file_bytes),
+            "resume_statistics": {
+                "word_count": len(
+                    extracted_text.split()
+                ),
+                "character_count": len(
+                    extracted_text
+                ),
+            },
+            "candidate": {
+                "name": parsed_data.get("name"),
+                "email": parsed_data.get("email"),
+                "phone": parsed_data.get("phone"),
+                "links": parsed_data.get("links"),
+                "skills": parsed_data.get("skills"),
+                "sections": parsed_data.get("sections"),
+            },
+            "resume_improvement": improvement_result,
         }
 
     except HTTPException:
