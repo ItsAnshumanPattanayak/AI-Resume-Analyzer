@@ -78,6 +78,13 @@ def test_reject_empty_resume(
 
     assert response.status_code == 400
 
+    data = response.json()
+
+    assert data["success"] is False
+    assert "empty" in str(
+        data["error"]["message"]
+    ).lower()
+
 
 def test_reject_short_job_description(
     client,
@@ -127,3 +134,26 @@ def test_improve_resume_endpoint(
 
     assert data["success"] is True
     assert "resume_improvement" in data
+
+def test_reject_unsupported_file(
+    client,
+) -> None:
+    response = client.post(
+        "/api/resume/parse",
+        files={
+            "file": (
+                "resume.txt",
+                b"Python developer",
+                "text/plain",
+            )
+        },
+    )
+
+    assert response.status_code == 415
+
+    data = response.json()
+
+    assert data["success"] is False
+    assert data["error"]["type"] == (
+        "http_error"
+    )

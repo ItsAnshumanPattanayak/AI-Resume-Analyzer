@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from fastapi import (
@@ -11,8 +12,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.advisor import analyze_resume_quality
 from app.ats import calculate_ats_score
+from app.error_handlers import (
+    register_exception_handlers,
+)
 from app.extractor import extract_resume_information
-from app.parser import SUPPORTED_EXTENSIONS, extract_resume_text
+from app.logging_config import configure_logging
+from app.parser import (
+    SUPPORTED_EXTENSIONS,
+    extract_resume_text,
+)
 from app.recommender import recommend_job_roles
 from app.semantic import (
     calculate_chunk_matches,
@@ -25,6 +33,11 @@ from app.similarity import (
 from app.skills import compare_resume_and_job_skills
 
 
+configure_logging()
+
+logger = logging.getLogger(__name__)
+
+
 app = FastAPI(
     title="AI Resume Analyzer API",
     description=(
@@ -32,8 +45,11 @@ app = FastAPI(
         "matching job descriptions, recommending job roles, "
         "and generating resume improvement suggestions."
     ),
-    version="1.1.0",
+    version="1.2.0",
 )
+
+
+register_exception_handlers(app)
 
 
 app.add_middleware(
@@ -66,16 +82,23 @@ async def read_and_validate_resume(
     if not file.filename:
         raise HTTPException(
             status_code=400,
-            detail="The uploaded file does not have a filename.",
+            detail=(
+                "The uploaded file does not have "
+                "a filename."
+            ),
         )
 
-    extension = Path(file.filename).suffix.lower()
+    extension = Path(
+        file.filename
+    ).suffix.lower()
 
     if extension not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
             status_code=415,
             detail={
-                "message": "Unsupported resume format.",
+                "message": (
+                    "Unsupported resume format."
+                ),
                 "supported_formats": sorted(
                     SUPPORTED_EXTENSIONS
                 ),
@@ -93,7 +116,10 @@ async def read_and_validate_resume(
     if len(file_bytes) > MAXIMUM_FILE_SIZE:
         raise HTTPException(
             status_code=413,
-            detail="The resume must be smaller than 5 MB.",
+            detail=(
+                "The resume must be smaller "
+                "than 5 MB."
+            ),
         )
 
     extracted_text = extract_resume_text(
@@ -105,8 +131,9 @@ async def read_and_validate_resume(
         raise HTTPException(
             status_code=422,
             detail=(
-                "No readable text was found. The resume may be "
-                "scanned, image-based, empty, or corrupted."
+                "No readable text was found. "
+                "The resume may be scanned, "
+                "image-based, empty or corrupted."
             ),
         )
 
@@ -116,25 +143,28 @@ async def read_and_validate_resume(
 @app.get("/")
 def home() -> dict:
     """
-    Root endpoint.
+    Root API endpoint.
     """
 
     return {
-        "message": "AI Resume Analyzer API is running.",
+        "message": (
+            "AI Resume Analyzer API is running."
+        ),
         "documentation": "/docs",
-        "version": "1.1.0",
+        "version": "1.2.0",
     }
 
 
 @app.get("/health")
 def health_check() -> dict:
     """
-    Check whether the backend service is running.
+    Check whether the backend is running.
     """
 
     return {
         "status": "healthy",
         "service": "AI Resume Analyzer API",
+        "version": "1.2.0",
     }
 
 
@@ -143,24 +173,38 @@ async def parse_resume(
     file: UploadFile = File(...),
 ) -> dict:
     """
-    Upload a PDF or DOCX resume, extract its text,
-    and return structured candidate information.
+    Parse a PDF or DOCX resume and return
+    structured candidate information.
     """
 
     try:
+        logger.info(
+            "Parsing resume: %s",
+            file.filename,
+        )
+
         file_bytes, extracted_text = (
             await read_and_validate_resume(file)
         )
 
-        resume_information = extract_resume_information(
-            extracted_text
+        resume_information = (
+            extract_resume_information(
+                extracted_text
+            )
+        )
+
+        logger.info(
+            "Resume parsed successfully: %s",
+            file.filename,
         )
 
         return {
             "success": True,
             "filename": file.filename,
             "content_type": file.content_type,
-            "file_size_bytes": len(file_bytes),
+            "file_size_bytes": len(
+                file_bytes
+            ),
             "word_count": len(
                 extracted_text.split()
             ),
@@ -170,30 +214,6 @@ async def parse_resume(
             "parsed_data": resume_information,
             "text": extracted_text,
         }
-
-    except HTTPException:
-        raise
-
-    except ValueError as error:
-        raise HTTPException(
-            status_code=422,
-            detail=str(error),
-        ) from error
-
-    except RuntimeError as error:
-        raise HTTPException(
-            status_code=500,
-            detail=str(error),
-        ) from error
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "An unexpected error occurred: "
-                f"{error}"
-            ),
-        ) from error
 
     finally:
         await file.close()
@@ -205,17 +225,7 @@ async def analyze_resume(
     job_description: str = Form(...),
 ) -> dict:
     """
-    Compare a resume against a job description using:
-
-    - Structured resume parsing
-    - Skill matching
-    - Skill-gap detection
-    - TF-IDF similarity
-    - Transformer semantic similarity
-    - Combined content similarity
-    - ATS compatibility scoring
-    - Job-role recommendations
-    - Resume quality analysis
+    Run complete resume-versus-job analysis.
     """
 
     try:
@@ -232,17 +242,19 @@ async def analyze_resume(
                 ),
             )
 
+        logger.info(
+            "Starting full resume analysis: %s",
+            file.filename,
+        )
+
         file_bytes, extracted_text = (
             await read_and_validate_resume(file)
         )
 
-        parsed_data = extract_resume_information(
-            extracted_text
-        )
-
-        role_recommendations = recommend_job_roles(
-            resume_text=extracted_text,
-            top_n=5,
+        parsed_data = (
+            extract_resume_information(
+                extracted_text
+            )
         )
 
         skill_comparison = (
@@ -252,12 +264,6 @@ async def analyze_resume(
                     cleaned_job_description
                 ),
             )
-        )
-
-        resume_quality = analyze_resume_quality(
-            resume_text=extracted_text,
-            parsed_data=parsed_data,
-            skill_comparison=skill_comparison,
         )
 
         tfidf_similarity = (
@@ -280,7 +286,9 @@ async def analyze_resume(
 
         similarity_result = (
             calculate_combined_similarity(
-                tfidf_similarity=tfidf_similarity,
+                tfidf_similarity=(
+                    tfidf_similarity
+                ),
                 semantic_similarity=(
                     semantic_similarity
                 ),
@@ -297,20 +305,49 @@ async def analyze_resume(
             )
         )
 
+        role_recommendations = (
+            recommend_job_roles(
+                resume_text=extracted_text,
+                top_n=5,
+            )
+        )
+
+        resume_quality = (
+            analyze_resume_quality(
+                resume_text=extracted_text,
+                parsed_data=parsed_data,
+                skill_comparison=(
+                    skill_comparison
+                ),
+            )
+        )
+
         ats_result = calculate_ats_score(
             resume_text=extracted_text,
             parsed_data=parsed_data,
-            skill_comparison=skill_comparison,
-            content_similarity=similarity_result[
-                "combined_percentage"
-            ],
+            skill_comparison=(
+                skill_comparison
+            ),
+            content_similarity=(
+                similarity_result[
+                    "combined_percentage"
+                ]
+            ),
+        )
+
+        logger.info(
+            "Full analysis completed: %s | ATS: %s",
+            file.filename,
+            ats_result["overall_score"],
         )
 
         return {
             "success": True,
             "filename": file.filename,
             "content_type": file.content_type,
-            "file_size_bytes": len(file_bytes),
+            "file_size_bytes": len(
+                file_bytes
+            ),
             "resume_statistics": {
                 "word_count": len(
                     extracted_text.split()
@@ -321,7 +358,9 @@ async def analyze_resume(
             },
             "candidate": parsed_data,
             "job_match": {
-                "similarity": similarity_result,
+                "similarity": (
+                    similarity_result
+                ),
                 "skills": skill_comparison,
                 "top_semantic_matches": (
                     top_semantic_matches
@@ -330,33 +369,11 @@ async def analyze_resume(
             "job_role_recommendations": (
                 role_recommendations
             ),
-            "resume_improvement": resume_quality,
+            "resume_improvement": (
+                resume_quality
+            ),
             "ats": ats_result,
         }
-
-    except HTTPException:
-        raise
-
-    except ValueError as error:
-        raise HTTPException(
-            status_code=422,
-            detail=str(error),
-        ) from error
-
-    except RuntimeError as error:
-        raise HTTPException(
-            status_code=500,
-            detail=str(error),
-        ) from error
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "An unexpected error occurred: "
-                f"{error}"
-            ),
-        ) from error
 
     finally:
         await file.close()
@@ -368,9 +385,7 @@ async def recommend_roles(
     top_n: int = Form(5),
 ) -> dict:
     """
-    Recommend suitable job roles using only the uploaded resume.
-
-    A job description is not required for this endpoint.
+    Recommend job roles using only the resume.
     """
 
     try:
@@ -378,28 +393,40 @@ async def recommend_roles(
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "top_n must be between 1 and 10."
+                    "top_n must be between "
+                    "1 and 10."
                 ),
             )
+
+        logger.info(
+            "Generating role recommendations: %s",
+            file.filename,
+        )
 
         file_bytes, extracted_text = (
             await read_and_validate_resume(file)
         )
 
-        parsed_data = extract_resume_information(
-            extracted_text
+        parsed_data = (
+            extract_resume_information(
+                extracted_text
+            )
         )
 
-        recommendations = recommend_job_roles(
-            resume_text=extracted_text,
-            top_n=top_n,
+        recommendations = (
+            recommend_job_roles(
+                resume_text=extracted_text,
+                top_n=top_n,
+            )
         )
 
         return {
             "success": True,
             "filename": file.filename,
             "content_type": file.content_type,
-            "file_size_bytes": len(file_bytes),
+            "file_size_bytes": len(
+                file_bytes
+            ),
             "resume_statistics": {
                 "word_count": len(
                     extracted_text.split()
@@ -409,38 +436,26 @@ async def recommend_roles(
                 ),
             },
             "candidate": {
-                "name": parsed_data.get("name"),
-                "email": parsed_data.get("email"),
-                "phone": parsed_data.get("phone"),
-                "links": parsed_data.get("links"),
-                "skills": parsed_data.get("skills"),
+                "name": parsed_data.get(
+                    "name"
+                ),
+                "email": parsed_data.get(
+                    "email"
+                ),
+                "phone": parsed_data.get(
+                    "phone"
+                ),
+                "links": parsed_data.get(
+                    "links"
+                ),
+                "skills": parsed_data.get(
+                    "skills"
+                ),
             },
-            "recommendations": recommendations,
-        }
-
-    except HTTPException:
-        raise
-
-    except ValueError as error:
-        raise HTTPException(
-            status_code=422,
-            detail=str(error),
-        ) from error
-
-    except RuntimeError as error:
-        raise HTTPException(
-            status_code=500,
-            detail=str(error),
-        ) from error
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "An unexpected error occurred: "
-                f"{error}"
+            "recommendations": (
+                recommendations
             ),
-        ) from error
+        }
 
     finally:
         await file.close()
@@ -451,30 +466,40 @@ async def improve_resume(
     file: UploadFile = File(...),
 ) -> dict:
     """
-    Analyze resume-writing quality and provide improvement advice.
-
-    A job description is not required for this endpoint.
+    Analyze resume-writing quality without
+    requiring a job description.
     """
 
     try:
+        logger.info(
+            "Running resume improvement analysis: %s",
+            file.filename,
+        )
+
         file_bytes, extracted_text = (
             await read_and_validate_resume(file)
         )
 
-        parsed_data = extract_resume_information(
-            extracted_text
+        parsed_data = (
+            extract_resume_information(
+                extracted_text
+            )
         )
 
-        improvement_result = analyze_resume_quality(
-            resume_text=extracted_text,
-            parsed_data=parsed_data,
+        improvement_result = (
+            analyze_resume_quality(
+                resume_text=extracted_text,
+                parsed_data=parsed_data,
+            )
         )
 
         return {
             "success": True,
             "filename": file.filename,
             "content_type": file.content_type,
-            "file_size_bytes": len(file_bytes),
+            "file_size_bytes": len(
+                file_bytes
+            ),
             "resume_statistics": {
                 "word_count": len(
                     extracted_text.split()
@@ -484,39 +509,29 @@ async def improve_resume(
                 ),
             },
             "candidate": {
-                "name": parsed_data.get("name"),
-                "email": parsed_data.get("email"),
-                "phone": parsed_data.get("phone"),
-                "links": parsed_data.get("links"),
-                "skills": parsed_data.get("skills"),
-                "sections": parsed_data.get("sections"),
+                "name": parsed_data.get(
+                    "name"
+                ),
+                "email": parsed_data.get(
+                    "email"
+                ),
+                "phone": parsed_data.get(
+                    "phone"
+                ),
+                "links": parsed_data.get(
+                    "links"
+                ),
+                "skills": parsed_data.get(
+                    "skills"
+                ),
+                "sections": parsed_data.get(
+                    "sections"
+                ),
             },
-            "resume_improvement": improvement_result,
-        }
-
-    except HTTPException:
-        raise
-
-    except ValueError as error:
-        raise HTTPException(
-            status_code=422,
-            detail=str(error),
-        ) from error
-
-    except RuntimeError as error:
-        raise HTTPException(
-            status_code=500,
-            detail=str(error),
-        ) from error
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "An unexpected error occurred: "
-                f"{error}"
+            "resume_improvement": (
+                improvement_result
             ),
-        ) from error
+        }
 
     finally:
         await file.close()
