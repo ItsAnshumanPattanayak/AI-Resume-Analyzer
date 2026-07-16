@@ -1,26 +1,84 @@
 import { useState } from "react";
 
+import AnalysisModeTabs from "./components/AnalysisModeTabs";
+import ImprovementOnlyResult from "./components/ImprovementOnlyResult";
+import ParsedResumeResult from "./components/ParsedResumeResult";
 import ResumeForm from "./components/ResumeForm";
+import RoleOnlyResult from "./components/RoleOnlyResult";
 import Dashboard from "./pages/Dashboard";
-import { analyzeResume } from "./services/api";
+import {
+  analyzeResume,
+  improveResume,
+  parseResume,
+  recommendRoles,
+} from "./services/api";
+
+const MODE_LOADING_MESSAGES = {
+  analyze:
+    "Extracting details, generating embeddings and calculating compatibility scores.",
+  parse:
+    "Extracting candidate information, skills and resume sections.",
+  roles:
+    "Comparing your resume with predefined technical career profiles.",
+  improve:
+    "Reviewing resume structure, language, action verbs and achievements.",
+};
 
 function App() {
-  const [analysisResult, setAnalysisResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [requestError, setRequestError] = useState("");
+  const [activeMode, setActiveMode] =
+    useState("analyze");
 
-  async function handleAnalyze(resumeFile, jobDescription) {
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [requestError, setRequestError] =
+    useState("");
+
+  function handleModeChange(nextMode) {
+    setActiveMode(nextMode);
+    setResult(null);
+    setRequestError("");
+  }
+
+  async function handleSubmit({
+    resumeFile,
+    jobDescription,
+    topN,
+  }) {
     setLoading(true);
     setRequestError("");
-    setAnalysisResult(null);
+    setResult(null);
 
     try {
-      const result = await analyzeResume(
-        resumeFile,
-        jobDescription,
-      );
+      let response;
 
-      setAnalysisResult(result);
+      switch (activeMode) {
+        case "parse":
+          response = await parseResume(resumeFile);
+          break;
+
+        case "roles":
+          response = await recommendRoles(
+            resumeFile,
+            topN,
+          );
+          break;
+
+        case "improve":
+          response = await improveResume(
+            resumeFile,
+          );
+          break;
+
+        case "analyze":
+        default:
+          response = await analyzeResume(
+            resumeFile,
+            jobDescription,
+          );
+          break;
+      }
+
+      setResult(response);
 
       window.setTimeout(() => {
         document
@@ -32,10 +90,36 @@ function App() {
       }, 100);
     } catch (error) {
       setRequestError(
-        error.message || "Resume analysis failed.",
+        error.message ||
+          "The requested analysis failed.",
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  function renderResult() {
+    switch (activeMode) {
+      case "parse":
+        return (
+          <ParsedResumeResult result={result} />
+        );
+
+      case "roles":
+        return (
+          <RoleOnlyResult result={result} />
+        );
+
+      case "improve":
+        return (
+          <ImprovementOnlyResult
+            result={result}
+          />
+        );
+
+      case "analyze":
+      default:
+        return <Dashboard result={result} />;
     }
   }
 
@@ -47,73 +131,92 @@ function App() {
 
           <div>
             <strong>Resume Analyzer</strong>
-            <small>AI-powered career analysis</small>
+            <small>
+              AI-powered career analysis
+            </small>
           </div>
         </a>
 
         <span className="status-badge">
-          Phase 8 frontend
+          Backend connected
         </span>
       </header>
 
       <main>
-        <section className="hero">
+        <section className="hero hero-compact">
           <div className="hero-copy">
-            <p className="eyebrow">AI + NLP + Machine Learning</p>
+            <p className="eyebrow">
+              AI + NLP + Machine Learning
+            </p>
 
             <h1>
-              Understand how well your resume matches the job.
+              Improve your resume with explainable
+              AI analysis.
             </h1>
 
             <p>
-              Analyze ATS compatibility, missing skills, semantic
-              alignment, suitable job roles and resume-writing
-              quality in one report.
+              Parse candidate information, compare a
+              resume with a job, identify suitable roles
+              and receive writing recommendations.
             </p>
 
             <div className="feature-pills">
-              <span>PDF and DOCX parsing</span>
-              <span>Transformer matching</span>
+              <span>ATS compatibility</span>
+              <span>Semantic matching</span>
               <span>Skill-gap detection</span>
-              <span>Role recommendations</span>
+              <span>Career recommendations</span>
             </div>
           </div>
 
           <ResumeForm
-            onAnalyze={handleAnalyze}
+            mode={activeMode}
+            onSubmit={handleSubmit}
             loading={loading}
           />
         </section>
 
+        <AnalysisModeTabs
+          activeMode={activeMode}
+          onModeChange={handleModeChange}
+          disabled={loading}
+        />
+
         {loading && (
-          <section className="loading-card" aria-live="polite">
+          <section
+            className="loading-card"
+            aria-live="polite"
+          >
             <div className="spinner" />
+
             <div>
-              <h2>Analyzing your resume</h2>
+              <h2>Processing your resume</h2>
+
               <p>
-                Extracting details, generating embeddings and
-                calculating compatibility scores.
+                {MODE_LOADING_MESSAGES[activeMode]}
               </p>
             </div>
           </section>
         )}
 
         {requestError && (
-          <section className="request-error" role="alert">
-            <strong>Analysis failed</strong>
+          <section
+            className="request-error"
+            role="alert"
+          >
+            <strong>Request failed</strong>
             <p>{requestError}</p>
           </section>
         )}
 
         <div id="analysis-results">
-          <Dashboard result={analysisResult} />
+          {renderResult()}
         </div>
       </main>
 
       <footer>
         <p>
-          AI Resume Analyzer — custom scores are intended for
-          guidance and do not represent a specific employer’s ATS.
+          Scores are custom guidance metrics and do not
+          represent a specific employer’s ATS.
         </p>
       </footer>
     </div>
