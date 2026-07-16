@@ -1,0 +1,122 @@
+import axios from "axios";
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 120000,
+});
+
+export async function analyzeResume(resumeFile, jobDescription) {
+  const formData = new FormData();
+
+  formData.append("file", resumeFile);
+  formData.append("job_description", jobDescription);
+
+  try {
+    const response = await apiClient.post(
+      "/api/resume/analyze",
+      formData,
+    );
+
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error));
+  }
+}
+
+export async function parseResume(resumeFile) {
+  const formData = new FormData();
+
+  formData.append("file", resumeFile);
+
+  try {
+    const response = await apiClient.post(
+      "/api/resume/parse",
+      formData,
+    );
+
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error));
+  }
+}
+
+export async function improveResume(resumeFile) {
+  const formData = new FormData();
+
+  formData.append("file", resumeFile);
+
+  try {
+    const response = await apiClient.post(
+      "/api/resume/improve",
+      formData,
+    );
+
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error));
+  }
+}
+
+export async function recommendRoles(resumeFile, topN = 5) {
+  const formData = new FormData();
+
+  formData.append("file", resumeFile);
+  formData.append("top_n", String(topN));
+
+  try {
+    const response = await apiClient.post(
+      "/api/resume/recommend-roles",
+      formData,
+    );
+
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error));
+  }
+}
+
+function getApiErrorMessage(error) {
+  if (!error.response) {
+    if (error.code === "ECONNABORTED") {
+      return "The analysis took too long. Please try again.";
+    }
+
+    return (
+      "Unable to connect to the backend. Make sure FastAPI is " +
+      "running on http://127.0.0.1:8000."
+    );
+  }
+
+  const responseData = error.response.data;
+
+  if (responseData?.error?.message) {
+    const message = responseData.error.message;
+
+    if (typeof message === "string") {
+      return message;
+    }
+
+    if (message?.message) {
+      return message.message;
+    }
+
+    return JSON.stringify(message);
+  }
+
+  if (responseData?.detail) {
+    if (typeof responseData.detail === "string") {
+      return responseData.detail;
+    }
+
+    if (responseData.detail?.message) {
+      return responseData.detail.message;
+    }
+  }
+
+  return `Request failed with status ${error.response.status}.`;
+}
+
+export default apiClient;
