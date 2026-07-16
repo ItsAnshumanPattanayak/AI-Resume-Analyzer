@@ -1,9 +1,7 @@
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 import jwt
-from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
 from fastapi.security import (
     HTTPAuthorizationCredentials,
@@ -14,35 +12,9 @@ from pwdlib import PasswordHash
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_database_session
 from app.models import User
-
-
-load_dotenv()
-
-
-JWT_SECRET_KEY = os.getenv(
-    "JWT_SECRET_KEY",
-)
-
-JWT_ALGORITHM = os.getenv(
-    "JWT_ALGORITHM",
-    "HS256",
-)
-
-ACCESS_TOKEN_EXPIRE_MINUTES = int(
-    os.getenv(
-        "ACCESS_TOKEN_EXPIRE_MINUTES",
-        "60",
-    )
-)
-
-
-if not JWT_SECRET_KEY:
-    raise RuntimeError(
-        "JWT_SECRET_KEY is missing. "
-        "Add it to backend/.env."
-    )
 
 
 password_hash = PasswordHash.recommended()
@@ -67,7 +39,7 @@ def verify_password(
     stored_password_hash: str,
 ) -> bool:
     """
-    Verify a plain password against its hash.
+    Verify a plain password against its stored hash.
     """
 
     return password_hash.verify(
@@ -83,25 +55,32 @@ def create_access_token(
     Create a signed JWT access token.
     """
 
+    issued_at = datetime.now(
+        timezone.utc
+    )
+
     expires_at = (
-        datetime.now(timezone.utc)
+        issued_at
         + timedelta(
             minutes=(
-                ACCESS_TOKEN_EXPIRE_MINUTES
+                settings
+                .access_token_expire_minutes
             )
         )
     )
 
     payload = {
         "sub": str(user_id),
+        "iat": issued_at,
         "exp": expires_at,
-        "iat": datetime.now(timezone.utc),
     }
 
     return jwt.encode(
         payload,
-        JWT_SECRET_KEY,
-        algorithm=JWT_ALGORITHM,
+        settings.jwt_secret_key,
+        algorithm=(
+            settings.jwt_algorithm
+        ),
     )
 
 
@@ -109,14 +88,16 @@ def decode_access_token(
     token: str,
 ) -> int:
     """
-    Decode a token and return the user ID.
+    Decode a JWT and return its user ID.
     """
 
     try:
         payload = jwt.decode(
             token,
-            JWT_SECRET_KEY,
-            algorithms=[JWT_ALGORITHM],
+            settings.jwt_secret_key,
+            algorithms=[
+                settings.jwt_algorithm
+            ],
         )
 
         subject = payload.get("sub")
@@ -126,7 +107,14 @@ def decode_access_token(
                 "Token subject is missing."
             )
 
-        return int(subject)
+        user_id = int(subject)
+
+        if user_id <= 0:
+            raise ValueError(
+                "Token subject is invalid."
+            )
+
+        return user_id
 
     except (
         InvalidTokenError,
@@ -134,7 +122,9 @@ def decode_access_token(
         TypeError,
     ) as error:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=(
+                status.HTTP_401_UNAUTHORIZED
+            ),
             detail=(
                 "Invalid or expired access token."
             ),
@@ -149,7 +139,7 @@ def get_user_by_email(
     email: str,
 ) -> User | None:
     """
-    Find a user by normalized email.
+    Find a user by normalized email address.
     """
 
     normalized_email = (
@@ -172,7 +162,7 @@ def authenticate_user(
     password: str,
 ) -> User | None:
     """
-    Validate login credentials.
+    Validate a user's login credentials.
     """
 
     user = get_user_by_email(
@@ -206,12 +196,14 @@ def get_current_user(
     ],
 ) -> User:
     """
-    Return the authenticated user.
+    Return the currently authenticated user.
     """
 
     if credentials is None:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=(
+                status.HTTP_401_UNAUTHORIZED
+            ),
             detail=(
                 "Authentication is required."
             ),
@@ -225,7 +217,9 @@ def get_current_user(
         != "bearer"
     ):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=(
+                status.HTTP_401_UNAUTHORIZED
+            ),
             detail=(
                 "Invalid authentication scheme."
             ),
@@ -245,10 +239,12 @@ def get_current_user(
 
     if user is None or not user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=(
+                status.HTTP_401_UNAUTHORIZED
+            ),
             detail=(
-                "The authenticated user "
-                "does not exist or is inactive."
+                "The authenticated user does not "
+                "exist or is inactive."
             ),
             headers={
                 "WWW-Authenticate": "Bearer",

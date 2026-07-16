@@ -4,75 +4,124 @@ from functools import lru_cache
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
+from app.config import settings
 
-MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+
+MODEL_NAME = settings.semantic_model_name
 
 
 @lru_cache(maxsize=1)
 def get_semantic_model() -> SentenceTransformer:
     """
-    Load the Sentence Transformer model once from the local cache.
+    Load and cache the configured Sentence Transformer model.
 
-    The model must have been downloaded successfully at least once.
-    local_files_only=True prevents repeated internet requests.
+    The loading behavior is controlled by:
+
+    SEMANTIC_MODEL_NAME
+    SEMANTIC_MODEL_LOCAL_ONLY
     """
 
     try:
         return SentenceTransformer(
             MODEL_NAME,
-            local_files_only=True,
+            local_files_only=(
+                settings.semantic_model_local_only
+            ),
         )
 
     except Exception as error:
+        loading_mode = (
+            "local cache only"
+            if settings.semantic_model_local_only
+            else "online or local cache"
+        )
+
         raise RuntimeError(
-            "The semantic model is not fully available in the local "
-            "Hugging Face cache. Connect to the internet and download "
-            "the model once, then run the application again."
+            (
+                "The semantic model could not be loaded. "
+                f"Model: {MODEL_NAME}. "
+                f"Loading mode: {loading_mode}. "
+                "Ensure the model is downloaded locally or enable "
+                "online model loading in the environment configuration."
+            )
         ) from error
 
 
-def clean_semantic_text(text: str) -> str:
+def clean_semantic_text(
+    text: str,
+) -> str:
     """
     Clean text while preserving punctuation that may help
-    understand sentences and technical terminology.
+    interpret sentences and technical terminology.
     """
 
     if not text:
         return ""
 
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
+    cleaned_text = (
+        text.replace(
+            "\r\n",
+            "\n",
+        )
+        .replace(
+            "\r",
+            "\n",
+        )
+    )
 
-    return text.strip()
+    cleaned_text = re.sub(
+        r"[ \t]+",
+        " ",
+        cleaned_text,
+    )
+
+    cleaned_text = re.sub(
+        r"\n{3,}",
+        "\n\n",
+        cleaned_text,
+    )
+
+    return cleaned_text.strip()
 
 
-def split_into_sentences(text: str) -> list[str]:
+def split_into_sentences(
+    text: str,
+) -> list[str]:
     """
     Split text into approximate sentences and resume lines.
 
-    Resume text often contains bullet points rather than
-    grammatically complete sentences, so line breaks are also
-    treated as boundaries.
+    Resume text often contains bullet points instead of
+    grammatically complete sentences, so line breaks are
+    also treated as boundaries.
     """
 
-    cleaned_text = clean_semantic_text(text)
+    cleaned_text = clean_semantic_text(
+        text
+    )
 
     if not cleaned_text:
         return []
 
     parts = re.split(
-        r"(?<=[.!?])\s+|\n+|(?:\s*[•▪●◦]\s*)",
+        (
+            r"(?<=[.!?])\s+"
+            r"|\n+"
+            r"|(?:\s*[•▪●◦]\s*)"
+        ),
         cleaned_text,
     )
 
-    sentences = []
+    sentences: list[str] = []
 
     for part in parts:
-        cleaned_part = part.strip(" -–—•▪●◦\t")
+        cleaned_part = part.strip(
+            " -–—•▪●◦\t"
+        )
 
         if cleaned_part:
-            sentences.append(cleaned_part)
+            sentences.append(
+                cleaned_part
+            )
 
     return sentences
 
@@ -90,10 +139,11 @@ def create_text_chunks(
             Complete resume or job-description text.
 
         maximum_words:
-            Approximate maximum number of words per chunk.
+            Approximate maximum words per chunk.
 
         overlap_sentences:
-            Number of sentences shared between consecutive chunks.
+            Number of sentences shared between
+            consecutive chunks.
 
     Returns:
         A list of text chunks.
@@ -109,31 +159,42 @@ def create_text_chunks(
             "overlap_sentences cannot be negative."
         )
 
-    sentences = split_into_sentences(text)
+    sentences = split_into_sentences(
+        text
+    )
 
     if not sentences:
         return []
 
-    chunks = []
-    current_sentences = []
+    chunks: list[str] = []
+    current_sentences: list[str] = []
     current_word_count = 0
 
     for sentence in sentences:
-        sentence_word_count = len(sentence.split())
+        sentence_word_count = len(
+            sentence.split()
+        )
 
         if (
             current_sentences
-            and current_word_count + sentence_word_count
-            > maximum_words
+            and (
+                current_word_count
+                + sentence_word_count
+                > maximum_words
+            )
         ):
             chunks.append(
-                " ".join(current_sentences)
+                " ".join(
+                    current_sentences
+                )
             )
 
             if overlap_sentences > 0:
-                current_sentences = current_sentences[
-                    -overlap_sentences:
-                ]
+                current_sentences = (
+                    current_sentences[
+                        -overlap_sentences:
+                    ]
+                )
             else:
                 current_sentences = []
 
@@ -142,12 +203,19 @@ def create_text_chunks(
                 for item in current_sentences
             )
 
-        current_sentences.append(sentence)
-        current_word_count += sentence_word_count
+        current_sentences.append(
+            sentence
+        )
+
+        current_word_count += (
+            sentence_word_count
+        )
 
     if current_sentences:
         chunks.append(
-            " ".join(current_sentences)
+            " ".join(
+                current_sentences
+            )
         )
 
     return chunks
@@ -160,7 +228,9 @@ def normalize_embedding(
     Convert an embedding to unit length.
     """
 
-    norm = np.linalg.norm(embedding)
+    norm = np.linalg.norm(
+        embedding
+    )
 
     if norm == 0:
         return embedding
@@ -176,12 +246,16 @@ def calculate_cosine_score(
     Calculate cosine similarity between two vectors.
     """
 
-    first_normalized = normalize_embedding(
-        first_embedding
+    first_normalized = (
+        normalize_embedding(
+            first_embedding
+        )
     )
 
-    second_normalized = normalize_embedding(
-        second_embedding
+    second_normalized = (
+        normalize_embedding(
+            second_embedding
+        )
     )
 
     score = np.dot(
@@ -196,14 +270,18 @@ def convert_similarity_to_percentage(
     similarity: float,
 ) -> float:
     """
-    Convert cosine similarity into a percentage from 0 to 100.
+    Convert cosine similarity into a percentage
+    between 0 and 100.
 
-    Negative similarity values are treated as zero.
+    Negative values are treated as zero.
     """
 
     bounded_similarity = max(
         0.0,
-        min(float(similarity), 1.0),
+        min(
+            float(similarity),
+            1.0,
+        ),
     )
 
     return round(
@@ -216,41 +294,56 @@ def encode_texts(
     texts: list[str],
 ) -> np.ndarray:
     """
-    Encode a list of texts using the cached semantic model.
+    Encode text values using the cached semantic model.
     """
 
-    if not texts:
+    cleaned_texts = [
+        clean_semantic_text(text)
+        for text in texts
+        if clean_semantic_text(text)
+    ]
+
+    if not cleaned_texts:
         raise ValueError(
-            "At least one text is required for encoding."
+            "At least one non-empty text is required "
+            "for encoding."
         )
 
     model = get_semantic_model()
 
     embeddings = model.encode(
-        texts,
+        cleaned_texts,
         convert_to_numpy=True,
         normalize_embeddings=True,
         show_progress_bar=False,
     )
 
-    return embeddings
+    return np.asarray(
+        embeddings,
+        dtype=np.float32,
+    )
 
 
 def calculate_document_embedding(
     text: str,
 ) -> np.ndarray:
     """
-    Create one document embedding by averaging chunk embeddings.
+    Create one document embedding by averaging
+    its chunk embeddings.
     """
 
-    chunks = create_text_chunks(text)
+    chunks = create_text_chunks(
+        text
+    )
 
     if not chunks:
         raise ValueError(
             "Cannot create an embedding from empty text."
         )
 
-    chunk_embeddings = encode_texts(chunks)
+    chunk_embeddings = encode_texts(
+        chunks
+    )
 
     document_embedding = np.mean(
         chunk_embeddings,
@@ -305,10 +398,11 @@ def calculate_chunk_matches(
     top_k: int = 5,
 ) -> list[dict]:
     """
-    Find resume chunks most similar to job-description chunks.
+    Find resume chunks most similar to
+    job-description chunks.
 
-    This helps explain which resume content contributed most
-    to the semantic matching result.
+    This provides explainability by showing which
+    resume content contributed most to the semantic score.
     """
 
     if top_k < 1:
@@ -324,7 +418,10 @@ def calculate_chunk_matches(
         job_description
     )
 
-    if not resume_chunks or not job_chunks:
+    if (
+        not resume_chunks
+        or not job_chunks
+    ):
         return []
 
     resume_embeddings = encode_texts(
@@ -335,9 +432,12 @@ def calculate_chunk_matches(
         job_chunks
     )
 
-    results = []
+    results: list[dict] = []
 
-    for resume_index, resume_embedding in enumerate(
+    for (
+        resume_index,
+        resume_embedding,
+    ) in enumerate(
         resume_embeddings
     ):
         similarities = np.dot(
@@ -346,20 +446,28 @@ def calculate_chunk_matches(
         )
 
         best_job_index = int(
-            np.argmax(similarities)
+            np.argmax(
+                similarities
+            )
         )
 
         best_similarity = float(
-            similarities[best_job_index]
+            similarities[
+                best_job_index
+            ]
         )
 
         results.append(
             {
                 "resume_chunk": (
-                    resume_chunks[resume_index]
+                    resume_chunks[
+                        resume_index
+                    ]
                 ),
                 "job_description_chunk": (
-                    job_chunks[best_job_index]
+                    job_chunks[
+                        best_job_index
+                    ]
                 ),
                 "similarity_percentage": (
                     convert_similarity_to_percentage(
@@ -377,4 +485,6 @@ def calculate_chunk_matches(
         reverse=True,
     )
 
-    return sorted_results[:top_k]
+    return sorted_results[
+        :top_k
+    ]

@@ -17,17 +17,21 @@ from sqlalchemy.orm import Session
 from app.advisor import analyze_resume_quality
 from app.ats import calculate_ats_score
 from app.auth import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
     authenticate_user,
     create_access_token,
     get_current_user,
 )
+from app.config import settings
 from app.database import (
     create_database_tables,
     get_database_session,
 )
-from app.error_handlers import register_exception_handlers
-from app.extractor import extract_resume_information
+from app.error_handlers import (
+    register_exception_handlers,
+)
+from app.extractor import (
+    extract_resume_information,
+)
 from app.history import (
     create_analysis_record,
     delete_analysis_record,
@@ -58,7 +62,9 @@ from app.similarity import (
     calculate_combined_similarity,
     calculate_tfidf_similarity,
 )
-from app.skills import compare_resume_and_job_skills
+from app.skills import (
+    compare_resume_and_job_skills,
+)
 from app.users import create_user
 
 
@@ -68,9 +74,11 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(application: FastAPI):
+async def lifespan(
+    application: FastAPI,
+):
     """
-    Initialize application resources during startup.
+    Initialize application resources.
     """
 
     create_database_tables()
@@ -79,22 +87,33 @@ async def lifespan(application: FastAPI):
         "Database tables initialized successfully."
     )
 
+    logger.info(
+        (
+            "%s version %s started in %s mode."
+        ),
+        settings.app_name,
+        settings.app_version,
+        settings.app_environment,
+    )
+
     yield
 
     logger.info(
-        "AI Resume Analyzer API shutting down."
+        "%s shutting down.",
+        settings.app_name,
     )
 
 
 app = FastAPI(
-    title="AI Resume Analyzer API",
+    title=settings.app_name,
     description=(
         "Authenticated backend API for parsing resumes, "
         "calculating ATS scores, matching job descriptions, "
         "recommending job roles, generating resume improvement "
         "suggestions, and storing private user analysis history."
     ),
-    version="1.4.0",
+    version=settings.app_version,
+    debug=settings.debug,
     lifespan=lifespan,
 )
 
@@ -102,20 +121,26 @@ app = FastAPI(
 register_exception_handlers(app)
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=(
+cors_origin_regex = None
+
+if settings.allow_localhost_origin_regex:
+    cors_origin_regex = (
         r"^https?://"
         r"(localhost|127\.0\.0\.1)"
         r"(:\d+)?$"
+    )
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_origin_regex=(
+        cors_origin_regex
     ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-MAXIMUM_FILE_SIZE = 5 * 1024 * 1024
 
 
 DatabaseSession = Annotated[
@@ -136,7 +161,7 @@ async def read_and_validate_resume(
     Validate an uploaded resume and extract its text.
 
     Returns:
-        The original file bytes and extracted resume text.
+        The original file bytes and extracted text.
     """
 
     if not file.filename:
@@ -170,15 +195,20 @@ async def read_and_validate_resume(
     if not file_bytes:
         raise HTTPException(
             status_code=400,
-            detail="The uploaded file is empty.",
+            detail=(
+                "The uploaded file is empty."
+            ),
         )
 
-    if len(file_bytes) > MAXIMUM_FILE_SIZE:
+    if (
+        len(file_bytes)
+        > settings.maximum_file_size_bytes
+    ):
         raise HTTPException(
             status_code=413,
             detail=(
-                "The resume must be smaller "
-                "than 5 MB."
+                "The resume must be smaller than "
+                f"{settings.maximum_file_size_mb} MB."
             ),
         )
 
@@ -242,10 +272,13 @@ def home() -> dict:
 
     return {
         "message": (
-            "AI Resume Analyzer API is running."
+            f"{settings.app_name} is running."
         ),
         "documentation": "/docs",
-        "version": "1.4.0",
+        "version": settings.app_version,
+        "environment": (
+            settings.app_environment
+        ),
     }
 
 
@@ -257,8 +290,11 @@ def health_check() -> dict:
 
     return {
         "status": "healthy",
-        "service": "AI Resume Analyzer API",
-        "version": "1.4.0",
+        "service": settings.app_name,
+        "version": settings.app_version,
+        "environment": (
+            settings.app_environment
+        ),
         "database": "connected",
         "authentication": "enabled",
     }
@@ -352,7 +388,8 @@ def login_user(
         access_token=access_token,
         token_type="bearer",
         expires_in=(
-            ACCESS_TOKEN_EXPIRE_MINUTES
+            settings
+            .access_token_expire_minutes
             * 60
         ),
         user=UserResponse.model_validate(
@@ -393,7 +430,9 @@ async def parse_resume(
         )
 
         file_bytes, extracted_text = (
-            await read_and_validate_resume(file)
+            await read_and_validate_resume(
+                file
+            )
         )
 
         resume_information = (
@@ -405,7 +444,9 @@ async def parse_resume(
         result = {
             "success": True,
             "filename": file.filename,
-            "content_type": file.content_type,
+            "content_type": (
+                file.content_type
+            ),
             "file_size_bytes": len(
                 file_bytes
             ),
@@ -415,7 +456,9 @@ async def parse_resume(
             "character_count": len(
                 extracted_text
             ),
-            "parsed_data": resume_information,
+            "parsed_data": (
+                resume_information
+            ),
             "text": extracted_text,
         }
 
@@ -456,7 +499,10 @@ async def analyze_resume(
             job_description.strip()
         )
 
-        if len(cleaned_job_description) < 50:
+        if (
+            len(cleaned_job_description)
+            < 50
+        ):
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -475,7 +521,9 @@ async def analyze_resume(
         )
 
         file_bytes, extracted_text = (
-            await read_and_validate_resume(file)
+            await read_and_validate_resume(
+                file
+            )
         )
 
         parsed_data = (
@@ -565,7 +613,9 @@ async def analyze_resume(
         result = {
             "success": True,
             "filename": file.filename,
-            "content_type": file.content_type,
+            "content_type": (
+                file.content_type
+            ),
             "file_size_bytes": len(
                 file_bytes
             ),
@@ -582,7 +632,9 @@ async def analyze_resume(
                 "similarity": (
                     similarity_result
                 ),
-                "skills": skill_comparison,
+                "skills": (
+                    skill_comparison
+                ),
                 "top_semantic_matches": (
                     top_semantic_matches
                 ),
@@ -622,7 +674,9 @@ async def analyze_resume(
         await file.close()
 
 
-@app.post("/api/resume/recommend-roles")
+@app.post(
+    "/api/resume/recommend-roles"
+)
 async def recommend_roles(
     current_user: AuthenticatedUser,
     database_session: DatabaseSession,
@@ -653,7 +707,9 @@ async def recommend_roles(
         )
 
         file_bytes, extracted_text = (
-            await read_and_validate_resume(file)
+            await read_and_validate_resume(
+                file
+            )
         )
 
         parsed_data = (
@@ -672,7 +728,9 @@ async def recommend_roles(
         result = {
             "success": True,
             "filename": file.filename,
-            "content_type": file.content_type,
+            "content_type": (
+                file.content_type
+            ),
             "file_size_bytes": len(
                 file_bytes
             ),
@@ -752,7 +810,9 @@ async def improve_resume(
         )
 
         file_bytes, extracted_text = (
-            await read_and_validate_resume(file)
+            await read_and_validate_resume(
+                file
+            )
         )
 
         parsed_data = (
@@ -771,7 +831,9 @@ async def improve_resume(
         result = {
             "success": True,
             "filename": file.filename,
-            "content_type": file.content_type,
+            "content_type": (
+                file.content_type
+            ),
             "file_size_bytes": len(
                 file_bytes
             ),
@@ -835,7 +897,9 @@ async def improve_resume(
 
 @app.get(
     "/api/history",
-    response_model=list[AnalysisHistoryItem],
+    response_model=list[
+        AnalysisHistoryItem
+    ],
 )
 def get_history(
     current_user: AuthenticatedUser,
@@ -851,7 +915,8 @@ def get_history(
         raise HTTPException(
             status_code=400,
             detail=(
-                "limit must be between 1 and 100."
+                "limit must be between "
+                "1 and 100."
             ),
         )
 
@@ -873,7 +938,9 @@ def get_history(
 
 @app.get(
     "/api/history/{record_id}",
-    response_model=AnalysisHistoryDetail,
+    response_model=(
+        AnalysisHistoryDetail
+    ),
 )
 def get_history_detail(
     record_id: int,
@@ -881,7 +948,7 @@ def get_history_detail(
     database_session: DatabaseSession,
 ):
     """
-    Return one report owned by the current user.
+    Return one report owned by the user.
     """
 
     record = get_analysis_record(
@@ -903,7 +970,9 @@ def get_history_detail(
 
 @app.delete(
     "/api/history/{record_id}",
-    response_model=DeleteHistoryResponse,
+    response_model=(
+        DeleteHistoryResponse
+    ),
 )
 def delete_history(
     record_id: int,
@@ -911,7 +980,7 @@ def delete_history(
     database_session: DatabaseSession,
 ) -> DeleteHistoryResponse:
     """
-    Delete one report owned by the current user.
+    Delete one report owned by the user.
     """
 
     record = get_analysis_record(

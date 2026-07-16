@@ -1,21 +1,37 @@
 from collections.abc import Generator
-from pathlib import Path
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Session,
+    sessionmaker,
+)
+
+from app.config import settings
 
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-DATABASE_FILE = BASE_DIR / "resume_analyzer.db"
+def get_engine_options() -> dict:
+    """
+    Return database-specific SQLAlchemy options.
+    """
 
-DATABASE_URL = f"sqlite:///{DATABASE_FILE.as_posix()}"
+    options: dict = {
+        "pool_pre_ping": True,
+    }
+
+    if settings.database_url.startswith(
+        "sqlite"
+    ):
+        options["connect_args"] = {
+            "check_same_thread": False,
+        }
+
+    return options
 
 
 engine = create_engine(
-    DATABASE_URL,
-    connect_args={
-        "check_same_thread": False,
-    },
+    settings.database_url,
+    **get_engine_options(),
 )
 
 
@@ -29,16 +45,17 @@ SessionLocal = sessionmaker(
 
 class Base(DeclarativeBase):
     """
-    Base class for SQLAlchemy database models.
+    Base class for database models.
     """
 
     pass
 
 
-def get_database_session() -> Generator[Session, None, None]:
+def get_database_session() -> (
+    Generator[Session, None, None]
+):
     """
-    Create one database session for a request
-    and close it after the request finishes.
+    Create one database session per request.
     """
 
     database_session = SessionLocal()
@@ -51,9 +68,14 @@ def get_database_session() -> Generator[Session, None, None]:
 
 def create_database_tables() -> None:
     """
-    Create any database tables that do not exist.
+    Create missing database tables.
+
+    Alembic will replace this behavior
+    for production migrations later.
     """
 
     from app import models  # noqa: F401
 
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(
+        bind=engine
+    )
