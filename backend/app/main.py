@@ -12,7 +12,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.ats import calculate_ats_score
 from app.extractor import extract_resume_information
 from app.parser import SUPPORTED_EXTENSIONS, extract_resume_text
-from app.similarity import calculate_tfidf_similarity
+from app.semantic import (
+    calculate_chunk_matches,
+    calculate_semantic_similarity,
+)
+from app.similarity import (
+    calculate_combined_similarity,
+    calculate_tfidf_similarity,
+)
 from app.skills import compare_resume_and_job_skills
 
 
@@ -48,7 +55,8 @@ async def read_and_validate_resume(
     Validate an uploaded resume and extract its text.
 
     Returns:
-        A tuple containing the original file bytes and extracted text.
+        A tuple containing the original file bytes
+        and extracted resume text.
     """
 
     if not file.filename:
@@ -64,7 +72,9 @@ async def read_and_validate_resume(
             status_code=415,
             detail={
                 "message": "Unsupported resume format.",
-                "supported_formats": sorted(SUPPORTED_EXTENSIONS),
+                "supported_formats": sorted(
+                    SUPPORTED_EXTENSIONS
+                ),
             },
         )
 
@@ -125,7 +135,9 @@ async def parse_resume(
     """
 
     try:
-        file_bytes, extracted_text = await read_and_validate_resume(file)
+        file_bytes, extracted_text = (
+            await read_and_validate_resume(file)
+        )
 
         resume_information = extract_resume_information(
             extracted_text
@@ -160,7 +172,10 @@ async def parse_resume(
     except Exception as error:
         raise HTTPException(
             status_code=500,
-            detail=f"An unexpected error occurred: {error}",
+            detail=(
+                "An unexpected error occurred: "
+                f"{error}"
+            ),
         ) from error
 
     finally:
@@ -173,11 +188,13 @@ async def analyze_resume(
     job_description: str = Form(...),
 ) -> dict:
     """
-    Compare a resume with a job description.
+    Compare a resume against a job description using:
 
-    Returns:
-        Parsed candidate information, skill gaps,
-        text similarity and ATS compatibility score.
+    - Skill matching
+    - TF-IDF similarity
+    - Transformer semantic similarity
+    - Combined similarity
+    - Rule-based ATS scoring
     """
 
     try:
@@ -192,8 +209,8 @@ async def analyze_resume(
                 ),
             )
 
-        file_bytes, extracted_text = await read_and_validate_resume(
-            file
+        file_bytes, extracted_text = (
+            await read_and_validate_resume(file)
         )
 
         parsed_data = extract_resume_information(
@@ -205,16 +222,34 @@ async def analyze_resume(
             job_description=cleaned_job_description,
         )
 
-        text_similarity = calculate_tfidf_similarity(
+        tfidf_similarity = calculate_tfidf_similarity(
             resume_text=extracted_text,
             job_description=cleaned_job_description,
+        )
+
+        semantic_similarity = calculate_semantic_similarity(
+            resume_text=extracted_text,
+            job_description=cleaned_job_description,
+        )
+
+        similarity_result = calculate_combined_similarity(
+            tfidf_similarity=tfidf_similarity,
+            semantic_similarity=semantic_similarity,
+        )
+
+        top_semantic_matches = calculate_chunk_matches(
+            resume_text=extracted_text,
+            job_description=cleaned_job_description,
+            top_k=5,
         )
 
         ats_result = calculate_ats_score(
             resume_text=extracted_text,
             parsed_data=parsed_data,
             skill_comparison=skill_comparison,
-            text_similarity=text_similarity,
+            content_similarity=similarity_result[
+                "combined_percentage"
+            ],
         )
 
         return {
@@ -223,13 +258,20 @@ async def analyze_resume(
             "content_type": file.content_type,
             "file_size_bytes": len(file_bytes),
             "resume_statistics": {
-                "word_count": len(extracted_text.split()),
-                "character_count": len(extracted_text),
+                "word_count": len(
+                    extracted_text.split()
+                ),
+                "character_count": len(
+                    extracted_text
+                ),
             },
             "candidate": parsed_data,
             "job_match": {
-                "text_similarity_percentage": text_similarity,
+                "similarity": similarity_result,
                 "skills": skill_comparison,
+                "top_semantic_matches": (
+                    top_semantic_matches
+                ),
             },
             "ats": ats_result,
         }
@@ -252,7 +294,10 @@ async def analyze_resume(
     except Exception as error:
         raise HTTPException(
             status_code=500,
-            detail=f"An unexpected error occurred: {error}",
+            detail=(
+                "An unexpected error occurred: "
+                f"{error}"
+            ),
         ) from error
 
     finally:

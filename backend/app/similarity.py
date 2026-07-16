@@ -73,3 +73,36 @@ def calculate_tfidf_similarity(
     except ValueError:
         # This can occur when both documents contain no usable vocabulary.
         return 0.0
+
+def calculate_combined_similarity(
+    tfidf_similarity: float,
+    semantic_similarity: float,
+) -> dict:
+    """
+    Combine lexical and semantic similarity.
+
+    Semantic similarity receives more weight because it can detect
+    meaning even when the resume and job description use different
+    wording.
+    """
+
+    tfidf_weight = 0.35
+    semantic_weight = 0.65
+
+    combined_score = (
+        tfidf_similarity * tfidf_weight
+        + semantic_similarity * semantic_weight
+    )
+
+    return {
+        "combined_percentage": round(combined_score, 2),
+        "tfidf_percentage": round(tfidf_similarity, 2),
+        "semantic_percentage": round(
+            semantic_similarity,
+            2,
+        ),
+        "weights": {
+            "tfidf": tfidf_weight,
+            "semantic": semantic_weight,
+        },
+    }
