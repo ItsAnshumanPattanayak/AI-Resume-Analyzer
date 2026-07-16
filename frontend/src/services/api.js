@@ -1,18 +1,36 @@
 import axios from "axios";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://127.0.0.1:8000";
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 120000,
 });
 
-export async function analyzeResume(resumeFile, jobDescription) {
+
+function createApiError(error) {
+  return new Error(
+    getApiErrorMessage(error),
+    {
+      cause: error,
+    },
+  );
+}
+
+
+export async function analyzeResume(
+  resumeFile,
+  jobDescription,
+) {
   const formData = new FormData();
 
   formData.append("file", resumeFile);
-  formData.append("job_description", jobDescription);
+  formData.append(
+    "job_description",
+    jobDescription,
+  );
 
   try {
     const response = await apiClient.post(
@@ -22,11 +40,14 @@ export async function analyzeResume(resumeFile, jobDescription) {
 
     return response.data;
   } catch (error) {
-    throw new Error(getApiErrorMessage(error));
+    throw createApiError(error);
   }
 }
 
-export async function parseResume(resumeFile) {
+
+export async function parseResume(
+  resumeFile,
+) {
   const formData = new FormData();
 
   formData.append("file", resumeFile);
@@ -39,11 +60,14 @@ export async function parseResume(resumeFile) {
 
     return response.data;
   } catch (error) {
-    throw new Error(getApiErrorMessage(error));
+    throw createApiError(error);
   }
 }
 
-export async function improveResume(resumeFile) {
+
+export async function improveResume(
+  resumeFile,
+) {
   const formData = new FormData();
 
   formData.append("file", resumeFile);
@@ -56,15 +80,22 @@ export async function improveResume(resumeFile) {
 
     return response.data;
   } catch (error) {
-    throw new Error(getApiErrorMessage(error));
+    throw createApiError(error);
   }
 }
 
-export async function recommendRoles(resumeFile, topN = 5) {
+
+export async function recommendRoles(
+  resumeFile,
+  topN = 5,
+) {
   const formData = new FormData();
 
   formData.append("file", resumeFile);
-  formData.append("top_n", String(topN));
+  formData.append(
+    "top_n",
+    String(topN),
+  );
 
   try {
     const response = await apiClient.post(
@@ -74,26 +105,85 @@ export async function recommendRoles(resumeFile, topN = 5) {
 
     return response.data;
   } catch (error) {
-    throw new Error(getApiErrorMessage(error));
+    throw createApiError(error);
   }
 }
+
+
+export async function getAnalysisHistory(
+  limit = 20,
+  offset = 0,
+) {
+  try {
+    const response = await apiClient.get(
+      "/api/history",
+      {
+        params: {
+          limit,
+          offset,
+        },
+      },
+    );
+
+    return response.data;
+  } catch (error) {
+    throw createApiError(error);
+  }
+}
+
+
+export async function getAnalysisHistoryDetail(
+  recordId,
+) {
+  try {
+    const response = await apiClient.get(
+      `/api/history/${recordId}`,
+    );
+
+    return response.data;
+  } catch (error) {
+    throw createApiError(error);
+  }
+}
+
+
+export async function deleteAnalysisHistory(
+  recordId,
+) {
+  try {
+    const response = await apiClient.delete(
+      `/api/history/${recordId}`,
+    );
+
+    return response.data;
+  } catch (error) {
+    throw createApiError(error);
+  }
+}
+
 
 function getApiErrorMessage(error) {
   if (!error.response) {
     if (error.code === "ECONNABORTED") {
-      return "The analysis took too long. Please try again.";
+      return (
+        "The request took too long. " +
+        "Please try again."
+      );
     }
 
     return (
-      "Unable to connect to the backend. Make sure FastAPI is " +
-      "running on http://127.0.0.1:8000."
+      "The browser could not read the backend response. " +
+      "Check that FastAPI is running and that the frontend " +
+      "origin is allowed by the backend CORS configuration."
     );
   }
 
-  const responseData = error.response.data;
+  const responseData =
+    error.response.data;
 
   if (responseData?.error?.message) {
-    const message = responseData.error.message;
+    const message =
+      responseData.error.message;
 
     if (typeof message === "string") {
       return message;
@@ -107,16 +197,38 @@ function getApiErrorMessage(error) {
   }
 
   if (responseData?.detail) {
-    if (typeof responseData.detail === "string") {
+    if (
+      typeof responseData.detail ===
+      "string"
+    ) {
       return responseData.detail;
     }
 
-    if (responseData.detail?.message) {
-      return responseData.detail.message;
+    if (
+      responseData.detail?.message
+    ) {
+      return (
+        responseData.detail.message
+      );
     }
+
+    return JSON.stringify(
+      responseData.detail,
+    );
   }
 
-  return `Request failed with status ${error.response.status}.`;
+  if (
+    typeof responseData?.message ===
+    "string"
+  ) {
+    return responseData.message;
+  }
+
+  return (
+    `Request failed with status ` +
+    `${error.response.status}.`
+  );
 }
+
 
 export default apiClient;

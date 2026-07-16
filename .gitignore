@@ -44,3 +44,9 @@ coverage.xml
 resume/
 __pycache__/
 *.pyc
+
+# Local SQLite database
+backend/resume_analyzer.db
+backend/resume_analyzer.db-journal
+backend/resume_analyzer.db-shm
+backend/resume_analyzer.db-wal
