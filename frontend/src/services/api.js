@@ -4,10 +4,30 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   "http://127.0.0.1:8000";
 
+export const TOKEN_STORAGE_KEY =
+  "resume_analyzer_access_token";
+
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 120000,
 });
+
+
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = window.localStorage.getItem(
+      TOKEN_STORAGE_KEY,
+    );
+
+    if (token) {
+      config.headers.Authorization =
+        `Bearer ${token}`;
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error),
+);
 
 
 function createApiError(error) {
@@ -17,6 +37,61 @@ function createApiError(error) {
       cause: error,
     },
   );
+}
+
+
+export async function registerUser({
+  name,
+  email,
+  password,
+}) {
+  try {
+    const response = await apiClient.post(
+      "/api/auth/register",
+      {
+        name,
+        email,
+        password,
+      },
+    );
+
+    return response.data;
+  } catch (error) {
+    throw createApiError(error);
+  }
+}
+
+
+export async function loginUser({
+  email,
+  password,
+}) {
+  try {
+    const response = await apiClient.post(
+      "/api/auth/login",
+      {
+        email,
+        password,
+      },
+    );
+
+    return response.data;
+  } catch (error) {
+    throw createApiError(error);
+  }
+}
+
+
+export async function getCurrentUser() {
+  try {
+    const response = await apiClient.get(
+      "/api/auth/me",
+    );
+
+    return response.data;
+  } catch (error) {
+    throw createApiError(error);
+  }
 }
 
 
@@ -207,9 +282,7 @@ function getApiErrorMessage(error) {
     if (
       responseData.detail?.message
     ) {
-      return (
-        responseData.detail.message
-      );
+      return responseData.detail.message;
     }
 
     return JSON.stringify(

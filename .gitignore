@@ -50,3 +50,5 @@ backend/resume_analyzer.db
 backend/resume_analyzer.db-journal
 backend/resume_analyzer.db-shm
 backend/resume_analyzer.db-wal
+
+backend/.env

@@ -6,10 +6,13 @@ import {
 
 import AnalysisHistory from "./components/AnalysisHistory";
 import AnalysisModeTabs from "./components/AnalysisModeTabs";
+import AuthForm from "./components/AuthForm";
 import ImprovementOnlyResult from "./components/ImprovementOnlyResult";
 import ParsedResumeResult from "./components/ParsedResumeResult";
 import ResumeForm from "./components/ResumeForm";
 import RoleOnlyResult from "./components/RoleOnlyResult";
+import UserHeader from "./components/UserHeader";
+import { useAuth } from "./context/useAuth";
 import Dashboard from "./pages/Dashboard";
 import {
   analyzeResume,
@@ -43,10 +46,17 @@ const VALID_ANALYSIS_MODES = new Set([
 
 
 function App() {
+  const {
+    isAuthenticated,
+    authLoading,
+    logout,
+  } = useAuth();
+
   const [activeMode, setActiveMode] =
     useState("analyze");
 
-  const [result, setResult] = useState(null);
+  const [result, setResult] =
+    useState(null);
 
   const [loading, setLoading] =
     useState(false);
@@ -64,37 +74,81 @@ function App() {
     useState("");
 
 
-  const loadHistory = useCallback(async () => {
-    setHistoryLoading(true);
-    setHistoryError("");
+  const handleUnauthorized =
+    useCallback((error) => {
+      const message =
+        error?.message || "";
 
-    try {
-      const records = await getAnalysisHistory(
-        20,
-        0,
-      );
+      const unauthorized =
+        message.includes(
+          "Authentication is required",
+        ) ||
+        message.includes(
+          "Invalid or expired access token",
+        ) ||
+        message.includes(
+          "does not exist or is inactive",
+        );
 
-      setHistoryRecords(records);
-    } catch (error) {
-      setHistoryError(
-        error.message ||
-          "Could not load analysis history.",
-      );
-    } finally {
-      setHistoryLoading(false);
-    }
-  }, []);
+      if (unauthorized) {
+        logout();
+      }
+
+      return unauthorized;
+    }, [logout]);
+
+
+  const loadHistory =
+    useCallback(async () => {
+      if (!isAuthenticated) {
+        setHistoryRecords([]);
+        return;
+      }
+
+      setHistoryLoading(true);
+      setHistoryError("");
+
+      try {
+        const records =
+          await getAnalysisHistory(
+            20,
+            0,
+          );
+
+        setHistoryRecords(records);
+      } catch (error) {
+        if (!handleUnauthorized(error)) {
+          setHistoryError(
+            error.message ||
+              "Could not load analysis history.",
+          );
+        }
+      } finally {
+        setHistoryLoading(false);
+      }
+    }, [
+      isAuthenticated,
+      handleUnauthorized,
+    ]);
 
 
   useEffect(() => {
-  const timeoutId = window.setTimeout(() => {
-    void loadHistory();
-  }, 0);
+    if (!isAuthenticated) {
+      return undefined;
+    }
 
-  return () => {
-    window.clearTimeout(timeoutId);
-  };
-}, [loadHistory]);
+    const timeoutId =
+      window.setTimeout(() => {
+        void loadHistory();
+      }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    isAuthenticated,
+    loadHistory,
+  ]);
 
 
   function handleModeChange(nextMode) {
@@ -160,10 +214,12 @@ function App() {
           });
       }, 100);
     } catch (error) {
-      setRequestError(
-        error.message ||
-          "The requested analysis failed.",
-      );
+      if (!handleUnauthorized(error)) {
+        setRequestError(
+          error.message ||
+            "The requested analysis failed.",
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -181,9 +237,6 @@ function App() {
           recordId,
         );
 
-      const savedResult =
-        record.result_data;
-
       const savedMode =
         VALID_ANALYSIS_MODES.has(
           record.analysis_type,
@@ -192,7 +245,7 @@ function App() {
           : "analyze";
 
       setActiveMode(savedMode);
-      setResult(savedResult);
+      setResult(record.result_data);
 
       window.setTimeout(() => {
         document
@@ -205,10 +258,12 @@ function App() {
           });
       }, 100);
     } catch (error) {
-      setRequestError(
-        error.message ||
-          "Could not open the saved report.",
-      );
+      if (!handleUnauthorized(error)) {
+        setRequestError(
+          error.message ||
+            "Could not open the saved report.",
+        );
+      }
     }
   }
 
@@ -216,9 +271,10 @@ function App() {
   async function handleDeleteHistory(
     recordId,
   ) {
-    const confirmed = window.confirm(
-      "Delete this saved analysis report?",
-    );
+    const confirmed =
+      window.confirm(
+        "Delete this saved analysis report?",
+      );
 
     if (!confirmed) {
       return;
@@ -239,10 +295,12 @@ function App() {
           ),
       );
     } catch (error) {
-      setHistoryError(
-        error.message ||
-          "Could not delete the saved report.",
-      );
+      if (!handleUnauthorized(error)) {
+        setHistoryError(
+          error.message ||
+            "Could not delete the saved report.",
+        );
+      }
     }
   }
 
@@ -279,29 +337,27 @@ function App() {
   }
 
 
+  if (authLoading) {
+    return (
+      <div className="auth-loading-page">
+        <div className="spinner" />
+
+        <p>
+          Restoring your session...
+        </p>
+      </div>
+    );
+  }
+
+
+  if (!isAuthenticated) {
+    return <AuthForm />;
+  }
+
+
   return (
     <div className="app-shell">
-      <header className="site-header">
-        <a className="brand" href="/">
-          <span className="brand-mark">
-            RA
-          </span>
-
-          <div>
-            <strong>
-              Resume Analyzer
-            </strong>
-
-            <small>
-              AI-powered career analysis
-            </small>
-          </div>
-        </a>
-
-        <span className="status-badge">
-          Backend connected
-        </span>
-      </header>
+      <UserHeader />
 
       <main>
         <section className="hero hero-compact">
@@ -336,11 +392,7 @@ function App() {
               </span>
 
               <span>
-                Career recommendations
-              </span>
-
-              <span>
-                Saved analysis history
+                Private history
               </span>
             </div>
           </div>
@@ -414,9 +466,8 @@ function App() {
 
       <footer>
         <p>
-          Scores are custom guidance
-          metrics and do not represent a
-          specific employer’s ATS.
+          Your saved reports are private
+          to your authenticated account.
         </p>
       </footer>
     </div>
