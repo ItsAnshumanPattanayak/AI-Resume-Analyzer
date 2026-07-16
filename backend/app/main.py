@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.ats import calculate_ats_score
 from app.extractor import extract_resume_information
 from app.parser import SUPPORTED_EXTENSIONS, extract_resume_text
+from app.recommender import recommend_job_roles
 from app.semantic import (
     calculate_chunk_matches,
     calculate_semantic_similarity,
@@ -27,7 +28,8 @@ app = FastAPI(
     title="AI Resume Analyzer API",
     description=(
         "Backend API for parsing resumes, calculating ATS scores, "
-        "matching job descriptions, and generating recommendations."
+        "matching job descriptions, recommending job roles, "
+        "and generating resume recommendations."
     ),
     version="1.0.0",
 )
@@ -55,8 +57,9 @@ async def read_and_validate_resume(
     Validate an uploaded resume and extract its text.
 
     Returns:
-        A tuple containing the original file bytes
-        and extracted resume text.
+        A tuple containing:
+        - Original file bytes
+        - Extracted resume text
     """
 
     if not file.filename:
@@ -111,14 +114,23 @@ async def read_and_validate_resume(
 
 @app.get("/")
 def home() -> dict:
+    """
+    Root endpoint.
+    """
+
     return {
         "message": "AI Resume Analyzer API is running.",
         "documentation": "/docs",
+        "version": "1.0.0",
     }
 
 
 @app.get("/health")
 def health_check() -> dict:
+    """
+    Check whether the backend service is running.
+    """
+
     return {
         "status": "healthy",
         "service": "AI Resume Analyzer API",
@@ -131,7 +143,7 @@ async def parse_resume(
 ) -> dict:
     """
     Upload a PDF or DOCX resume, extract its text,
-    and return structured resume information.
+    and return structured candidate information.
     """
 
     try:
@@ -148,8 +160,12 @@ async def parse_resume(
             "filename": file.filename,
             "content_type": file.content_type,
             "file_size_bytes": len(file_bytes),
-            "word_count": len(extracted_text.split()),
-            "character_count": len(extracted_text),
+            "word_count": len(
+                extracted_text.split()
+            ),
+            "character_count": len(
+                extracted_text
+            ),
             "parsed_data": resume_information,
             "text": extracted_text,
         }
@@ -190,15 +206,20 @@ async def analyze_resume(
     """
     Compare a resume against a job description using:
 
+    - Structured resume parsing
     - Skill matching
+    - Skill-gap detection
     - TF-IDF similarity
     - Transformer semantic similarity
-    - Combined similarity
-    - Rule-based ATS scoring
+    - Combined content similarity
+    - ATS compatibility scoring
+    - Job-role recommendations
     """
 
     try:
-        cleaned_job_description = job_description.strip()
+        cleaned_job_description = (
+            job_description.strip()
+        )
 
         if len(cleaned_job_description) < 50:
             raise HTTPException(
@@ -217,30 +238,55 @@ async def analyze_resume(
             extracted_text
         )
 
-        skill_comparison = compare_resume_and_job_skills(
+        role_recommendations = recommend_job_roles(
             resume_text=extracted_text,
-            job_description=cleaned_job_description,
+            top_n=5,
         )
 
-        tfidf_similarity = calculate_tfidf_similarity(
-            resume_text=extracted_text,
-            job_description=cleaned_job_description,
+        skill_comparison = (
+            compare_resume_and_job_skills(
+                resume_text=extracted_text,
+                job_description=(
+                    cleaned_job_description
+                ),
+            )
         )
 
-        semantic_similarity = calculate_semantic_similarity(
-            resume_text=extracted_text,
-            job_description=cleaned_job_description,
+        tfidf_similarity = (
+            calculate_tfidf_similarity(
+                resume_text=extracted_text,
+                job_description=(
+                    cleaned_job_description
+                ),
+            )
         )
 
-        similarity_result = calculate_combined_similarity(
-            tfidf_similarity=tfidf_similarity,
-            semantic_similarity=semantic_similarity,
+        semantic_similarity = (
+            calculate_semantic_similarity(
+                resume_text=extracted_text,
+                job_description=(
+                    cleaned_job_description
+                ),
+            )
         )
 
-        top_semantic_matches = calculate_chunk_matches(
-            resume_text=extracted_text,
-            job_description=cleaned_job_description,
-            top_k=5,
+        similarity_result = (
+            calculate_combined_similarity(
+                tfidf_similarity=tfidf_similarity,
+                semantic_similarity=(
+                    semantic_similarity
+                ),
+            )
+        )
+
+        top_semantic_matches = (
+            calculate_chunk_matches(
+                resume_text=extracted_text,
+                job_description=(
+                    cleaned_job_description
+                ),
+                top_k=5,
+            )
         )
 
         ats_result = calculate_ats_score(
@@ -273,7 +319,94 @@ async def analyze_resume(
                     top_semantic_matches
                 ),
             },
+            "job_role_recommendations": (
+                role_recommendations
+            ),
             "ats": ats_result,
+        }
+
+    except HTTPException:
+        raise
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422,
+            detail=str(error),
+        ) from error
+
+    except RuntimeError as error:
+        raise HTTPException(
+            status_code=500,
+            detail=str(error),
+        ) from error
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "An unexpected error occurred: "
+                f"{error}"
+            ),
+        ) from error
+
+    finally:
+        await file.close()
+
+
+@app.post("/api/resume/recommend-roles")
+async def recommend_roles(
+    file: UploadFile = File(...),
+    top_n: int = Form(5),
+) -> dict:
+    """
+    Recommend suitable job roles using only the uploaded resume.
+
+    A job description is not required for this endpoint.
+    """
+
+    try:
+        if not 1 <= top_n <= 10:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "top_n must be between 1 and 10."
+                ),
+            )
+
+        file_bytes, extracted_text = (
+            await read_and_validate_resume(file)
+        )
+
+        parsed_data = extract_resume_information(
+            extracted_text
+        )
+
+        recommendations = recommend_job_roles(
+            resume_text=extracted_text,
+            top_n=top_n,
+        )
+
+        return {
+            "success": True,
+            "filename": file.filename,
+            "content_type": file.content_type,
+            "file_size_bytes": len(file_bytes),
+            "resume_statistics": {
+                "word_count": len(
+                    extracted_text.split()
+                ),
+                "character_count": len(
+                    extracted_text
+                ),
+            },
+            "candidate": {
+                "name": parsed_data.get("name"),
+                "email": parsed_data.get("email"),
+                "phone": parsed_data.get("phone"),
+                "links": parsed_data.get("links"),
+                "skills": parsed_data.get("skills"),
+            },
+            "recommendations": recommendations,
         }
 
     except HTTPException:

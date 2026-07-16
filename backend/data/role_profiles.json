@@ -1,0 +1,144 @@
+{
+  "AI Engineer": {
+    "description": "Design and build artificial intelligence applications using machine learning, deep learning, generative AI, large language models, retrieval augmented generation and AI agents.",
+    "required_skills": [
+      "python",
+      "machine learning",
+      "deep learning",
+      "artificial intelligence",
+      "pytorch",
+      "tensorflow",
+      "generative ai",
+      "llm",
+      "rag",
+      "langchain",
+      "fastapi",
+      "git"
+    ]
+  },
+  "Machine Learning Engineer": {
+    "description": "Build, train, evaluate, deploy and maintain machine learning models and data pipelines for production applications.",
+    "required_skills": [
+      "python",
+      "machine learning",
+      "scikit-learn",
+      "pandas",
+      "numpy",
+      "feature engineering",
+      "data preprocessing",
+      "tensorflow",
+      "pytorch",
+      "docker",
+      "git"
+    ]
+  },
+  "Data Scientist": {
+    "description": "Analyze data, build statistical and machine learning models, perform experiments and communicate insights using visualizations.",
+    "required_skills": [
+      "python",
+      "sql",
+      "statistics",
+      "machine learning",
+      "pandas",
+      "numpy",
+      "scikit-learn",
+      "matplotlib",
+      "seaborn",
+      "data analysis",
+      "data visualization"
+    ]
+  },
+  "Data Analyst": {
+    "description": "Clean, analyze and visualize business data, create dashboards and communicate actionable findings.",
+    "required_skills": [
+      "sql",
+      "excel",
+      "python",
+      "pandas",
+      "numpy",
+      "data analysis",
+      "data visualization",
+      "power bi",
+      "tableau",
+      "statistics"
+    ]
+  },
+  "Python Developer": {
+    "description": "Develop applications, automation scripts, APIs and backend services using Python and related frameworks.",
+    "required_skills": [
+      "python",
+      "object-oriented programming",
+      "data structures",
+      "algorithms",
+      "fastapi",
+      "flask",
+      "django",
+      "sql",
+      "git",
+      "rest api"
+    ]
+  },
+  "Backend Developer": {
+    "description": "Build and maintain server-side applications, REST APIs, databases, authentication systems and scalable backend services.",
+    "required_skills": [
+      "python",
+      "fastapi",
+      "flask",
+      "django",
+      "rest api",
+      "sql",
+      "postgresql",
+      "mongodb",
+      "docker",
+      "git",
+      "linux"
+    ]
+  },
+  "NLP Engineer": {
+    "description": "Build natural language processing systems using transformers, language models, embeddings, semantic search and text-processing pipelines.",
+    "required_skills": [
+      "python",
+      "natural language processing",
+      "nlp",
+      "transformers",
+      "hugging face",
+      "sentence transformers",
+      "spacy",
+      "nltk",
+      "pytorch",
+      "llm",
+      "rag"
+    ]
+  },
+  "Computer Vision Engineer": {
+    "description": "Develop image and video analysis systems using deep learning, image processing and computer vision models.",
+    "required_skills": [
+      "python",
+      "computer vision",
+      "opencv",
+      "deep learning",
+      "pytorch",
+      "tensorflow",
+      "numpy",
+      "image processing",
+      "cnn",
+      "object detection"
+    ]
+  },
+  "DevOps Engineer": {
+    "description": "Automate deployment, infrastructure, integration and monitoring using cloud and container technologies.",
+    "required_skills": [
+      "linux",
+      "docker",
+      "kubernetes",
+      "aws",
+      "azure",
+      "gcp",
+      "jenkins",
+      "github actions",
+      "ci/cd",
+      "git",
+      "nginx"
+    ]
+  }
+}

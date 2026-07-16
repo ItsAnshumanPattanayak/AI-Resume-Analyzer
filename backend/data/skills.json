@@ -34,6 +34,9 @@
     "bootstrap"
   ],
   "ai_ml": [
+    "cnn",
+    "object detection",
+    "image processing" ,
     "machine learning",
     "deep learning",
     "artificial intelligence",
@@ -112,6 +115,8 @@
     "kaggle"
   ],
   "concepts": [
+    "backend development",
+    "api development" ,
     "data structures",
     "algorithms",
     "object-oriented programming",
