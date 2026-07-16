@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.extractor import extract_resume_information
 from app.parser import SUPPORTED_EXTENSIONS, extract_resume_text
 
 
@@ -16,7 +17,7 @@ app = FastAPI(
 )
 
 
-# This allows our React frontend to communicate with FastAPI.
+# Allows the React frontend to communicate with FastAPI.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -50,7 +51,8 @@ async def parse_resume(
     file: UploadFile = File(...),
 ) -> dict:
     """
-    Upload a PDF or DOCX resume and return its extracted text.
+    Upload a PDF or DOCX resume, extract its text,
+    and return structured resume information.
     """
 
     if not file.filename:
@@ -73,8 +75,14 @@ async def parse_resume(
     try:
         file_bytes = await file.read()
 
-        # 5 MB maximum file size.
+        # Maximum allowed file size: 5 MB.
         maximum_file_size = 5 * 1024 * 1024
+
+        if not file_bytes:
+            raise HTTPException(
+                status_code=400,
+                detail="The uploaded file is empty.",
+            )
 
         if len(file_bytes) > maximum_file_size:
             raise HTTPException(
@@ -99,6 +107,8 @@ async def parse_resume(
         word_count = len(extracted_text.split())
         character_count = len(extracted_text)
 
+        resume_information = extract_resume_information(extracted_text)
+
         return {
             "success": True,
             "filename": file.filename,
@@ -106,6 +116,7 @@ async def parse_resume(
             "file_size_bytes": len(file_bytes),
             "word_count": word_count,
             "character_count": character_count,
+            "parsed_data": resume_information,
             "text": extracted_text,
         }
 
@@ -115,6 +126,12 @@ async def parse_resume(
     except ValueError as error:
         raise HTTPException(
             status_code=422,
+            detail=str(error),
+        ) from error
+
+    except RuntimeError as error:
+        raise HTTPException(
+            status_code=500,
             detail=str(error),
         ) from error
 
