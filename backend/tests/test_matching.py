@@ -1,66 +1,75 @@
-from app.ats import calculate_ats_score
-from app.extractor import extract_resume_information
-from app.similarity import calculate_tfidf_similarity
-from app.skills import compare_resume_and_job_skills
-
-
-resume_text = """
-ANSHU KUMAR
-
-Email: anshu@example.com
-Phone: +91 9876543210
-GitHub: https://github.com/anshu
-LinkedIn: https://linkedin.com/in/anshu
-
-SUMMARY
-Computer Science student with experience in Python,
-Machine Learning and FastAPI.
-
-SKILLS
-Python, FastAPI, SQL, Git, GitHub, Machine Learning,
-Scikit-learn, MongoDB
-
-EDUCATION
-B.Tech Computer Science and Engineering
-CGPA: 8.2
-
-PROJECTS
-Built an AI resume analyzer using Python and FastAPI.
-Processed more than 1,000 resume records.
-"""
-
-job_description = """
-We are hiring a Python backend developer with experience
-in FastAPI, REST APIs, PostgreSQL, SQL, Git, Docker, Linux,
-AWS and MongoDB. Machine learning knowledge is preferred.
-"""
-
-
-parsed_data = extract_resume_information(resume_text)
-
-skill_comparison = compare_resume_and_job_skills(
-    resume_text,
-    job_description,
+from app.similarity import (
+    calculate_combined_similarity,
+    calculate_tfidf_similarity,
 )
-
-similarity = calculate_tfidf_similarity(
-    resume_text,
-    job_description,
-)
-
-ats_result = calculate_ats_score(
-    resume_text=resume_text,
-    parsed_data=parsed_data,
-    skill_comparison=skill_comparison,
-    text_similarity=similarity,
+from app.skills import (
+    compare_resume_and_job_skills,
 )
 
 
-print("\nText similarity:")
-print(similarity)
+def test_tfidf_similarity_returns_percentage(
+    sample_resume_text: str,
+    sample_job_description: str,
+) -> None:
+    score = calculate_tfidf_similarity(
+        resume_text=sample_resume_text,
+        job_description=sample_job_description,
+    )
 
-print("\nSkill comparison:")
-print(skill_comparison)
+    assert isinstance(score, float)
+    assert 0 <= score <= 100
 
-print("\nATS result:")
-print(ats_result)
+
+def test_similar_documents_score_above_zero() -> None:
+    resume = (
+        "Python developer experienced with FastAPI "
+        "SQL and machine learning."
+    )
+
+    job = (
+        "Hiring a Python developer with FastAPI "
+        "and machine learning experience."
+    )
+
+    score = calculate_tfidf_similarity(
+        resume,
+        job,
+    )
+
+    assert score > 0
+
+
+def test_empty_document_similarity() -> None:
+    score = calculate_tfidf_similarity(
+        "",
+        "Python developer required",
+    )
+
+    assert score == 0.0
+
+
+def test_combined_similarity() -> None:
+    result = calculate_combined_similarity(
+        tfidf_similarity=40.0,
+        semantic_similarity=80.0,
+    )
+
+    assert result["combined_percentage"] == 66.0
+    assert result["tfidf_percentage"] == 40.0
+    assert result["semantic_percentage"] == 80.0
+
+
+def test_skill_comparison(
+    sample_resume_text: str,
+    sample_job_description: str,
+) -> None:
+    result = compare_resume_and_job_skills(
+        resume_text=sample_resume_text,
+        job_description=sample_job_description,
+    )
+
+    assert "python" in result["matched_skills"]
+    assert result["matched_count"] > 0
+    assert 0 <= result[
+        "skill_match_percentage"
+    ] <= 100

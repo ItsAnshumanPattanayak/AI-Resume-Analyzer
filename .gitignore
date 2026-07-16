@@ -34,3 +34,13 @@ frontend/dist/
 resume/
 venv/
 .env
+
+# Pytest and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+resume/
+__pycache__/
+*.pyc

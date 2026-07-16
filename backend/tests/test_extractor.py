@@ -1,37 +1,86 @@
-from app.extractor import extract_resume_information
+from app.extractor import (
+    extract_email,
+    extract_name,
+    extract_phone,
+    extract_resume_information,
+    extract_skills,
+    extract_urls,
+)
 
 
-sample_resume = """
-ANSHU KUMAR
+def test_extract_email() -> None:
+    text = "Contact me at anshuman@example.com"
 
-Email: anshu@example.com
-Phone: +91 9876543210
-LinkedIn: https://www.linkedin.com/in/anshukumar
-GitHub: https://github.com/anshukumar
-
-SUMMARY
-Computer Science student interested in Machine Learning and Agentic AI.
-
-TECHNICAL SKILLS
-Python, FastAPI, SQL, MongoDB, Git, GitHub, PyTorch,
-Scikit-learn, Docker, Linux
-
-EDUCATION
-B.Tech in Computer Science and Engineering
-Centurion University of Technology and Management
-CGPA: 8.2
-
-PROJECTS
-AI Resume Analyzer using Python, FastAPI and NLP.
-"""
+    assert extract_email(text) == (
+        "anshuman@example.com"
+    )
 
 
-result = extract_resume_information(sample_resume)
+def test_extract_indian_phone() -> None:
+    text = "Phone: +91 9876543210"
 
-print("Name:", result["name"])
-print("Email:", result["email"])
-print("Phone:", result["phone"])
-print("Links:", result["links"])
-print("Skills:", result["skills"])
-print("Education:", result["education"])
-print("Sections:", result["sections"])
+    result = extract_phone(text)
+
+    assert result is not None
+    assert "9876543210" in result
+
+
+def test_extract_urls() -> None:
+    text = """
+    LinkedIn: https://linkedin.com/in/anshuman
+    GitHub: https://github.com/anshuman
+    """
+
+    urls = extract_urls(text)
+
+    assert len(urls) == 2
+    assert any(
+        "linkedin.com" in url
+        for url in urls
+    )
+    assert any(
+        "github.com" in url
+        for url in urls
+    )
+
+
+def test_extract_name(
+    sample_resume_text: str,
+) -> None:
+    result = extract_name(
+        sample_resume_text
+    )
+
+    assert result == "Anshuman Pattanayak"
+
+
+def test_extract_skills(
+    sample_resume_text: str,
+) -> None:
+    result = extract_skills(
+        sample_resume_text
+    )
+
+    all_detected = {
+        skill
+        for skills in result.values()
+        for skill in skills
+    }
+
+    assert "python" in all_detected
+    assert "machine learning" in all_detected
+    assert "fastapi" in all_detected
+
+
+def test_complete_information_extraction(
+    sample_resume_text: str,
+) -> None:
+    result = extract_resume_information(
+        sample_resume_text
+    )
+
+    assert result["name"] == "Anshuman Pattanayak"
+    assert result["email"] == "anshuman@example.com"
+    assert result["phone"] is not None
+    assert result["links"]["github"] is not None
+    assert result["skills"]["total_detected"] > 0
