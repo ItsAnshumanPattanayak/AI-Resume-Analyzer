@@ -351,6 +351,16 @@ def test_rate_limit_defaults() -> None:
     assert test_settings.rate_limit_resume_requests == 10
 
 
+def test_performance_configuration_defaults_and_bounds() -> None:
+    test_settings = create_test_settings()
+
+    assert test_settings.semantic_result_cache_size == 32
+    assert test_settings.performance_logging_enabled is False
+
+    with pytest.raises(ValidationError):
+        create_test_settings(semantic_result_cache_size=-1)
+
+
 def test_unsupported_jwt_algorithm_is_rejected() -> None:
     with pytest.raises(ValidationError):
         create_test_settings(jwt_algorithm="none")

@@ -154,6 +154,14 @@ class Settings(BaseSettings):
 
     semantic_model_local_only: bool = True
 
+    semantic_result_cache_size: int = Field(
+        default=32,
+        ge=0,
+        le=512,
+    )
+
+    performance_logging_enabled: bool = False
+
     log_level: Literal[
         "DEBUG",
         "INFO",

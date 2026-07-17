@@ -1,7 +1,7 @@
 from typing import Any
 
 from sqlalchemy import desc, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from app.models import AnalysisRecord
 
@@ -159,6 +159,18 @@ def list_analysis_records(
         .order_by(
             desc(
                 AnalysisRecord.created_at
+            )
+        )
+        .options(
+            load_only(
+                AnalysisRecord.id,
+                AnalysisRecord.analysis_type,
+                AnalysisRecord.filename,
+                AnalysisRecord.candidate_name,
+                AnalysisRecord.ats_score,
+                AnalysisRecord.quality_score,
+                AnalysisRecord.best_role,
+                AnalysisRecord.created_at,
             )
         )
         .offset(offset)

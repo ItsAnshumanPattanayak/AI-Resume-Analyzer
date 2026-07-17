@@ -40,6 +40,7 @@ function ResumeForm({
   const [topN, setTopN] = useState(5);
   const [formError, setFormError] = useState("");
   const fileInputRef = useRef(null);
+  const submissionPendingRef = useRef(false);
 
   const modeContent =
     MODE_CONTENT[mode] || MODE_CONTENT.analyze;
@@ -81,6 +82,11 @@ function ResumeForm({
 
   async function handleSubmit(event) {
     event.preventDefault();
+
+    if (loading || submissionPendingRef.current) {
+      return;
+    }
+
     setFormError("");
 
     if (!resumeFile) {
@@ -100,11 +106,16 @@ function ResumeForm({
       return;
     }
 
-    await onSubmit({
-      resumeFile,
-      jobDescription: jobDescription.trim(),
-      topN,
-    });
+    submissionPendingRef.current = true;
+    try {
+      await onSubmit({
+        resumeFile,
+        jobDescription: jobDescription.trim(),
+        topN,
+      });
+    } finally {
+      submissionPendingRef.current = false;
+    }
   }
 
   function clearForm() {

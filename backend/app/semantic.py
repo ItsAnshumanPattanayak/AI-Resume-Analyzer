@@ -1,5 +1,7 @@
 import re
-from functools import lru_cache
+import hashlib
+import threading
+from collections import OrderedDict
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -7,10 +9,14 @@ from sentence_transformers import SentenceTransformer
 from app.config import settings
 
 
-MODEL_NAME = settings.semantic_model_name
+PREPROCESSING_VERSION = "semantic-v1"
+_model_lock = threading.Lock()
+_inference_lock = threading.Lock()
+_cache_lock = threading.Lock()
+_semantic_model: SentenceTransformer | None = None
+_embedding_cache: OrderedDict[str, np.ndarray] = OrderedDict()
 
 
-@lru_cache(maxsize=1)
 def get_semantic_model() -> SentenceTransformer:
     """
     Load and cache the configured Sentence Transformer model.
@@ -21,30 +27,56 @@ def get_semantic_model() -> SentenceTransformer:
     SEMANTIC_MODEL_LOCAL_ONLY
     """
 
-    try:
-        return SentenceTransformer(
-            MODEL_NAME,
-            local_files_only=(
-                settings.semantic_model_local_only
-            ),
-        )
+    global _semantic_model
 
-    except Exception as error:
-        loading_mode = (
-            "local cache only"
-            if settings.semantic_model_local_only
-            else "online or local cache"
-        )
+    if _semantic_model is not None:
+        return _semantic_model
 
-        raise RuntimeError(
-            (
-                "The semantic model could not be loaded. "
-                f"Model: {MODEL_NAME}. "
-                f"Loading mode: {loading_mode}. "
-                "Ensure the model is downloaded locally or enable "
-                "online model loading in the environment configuration."
+    with _model_lock:
+        if _semantic_model is not None:
+            return _semantic_model
+
+        try:
+            model = SentenceTransformer(
+                settings.semantic_model_name,
+                local_files_only=(
+                    settings.semantic_model_local_only
+                ),
             )
-        ) from error
+
+        except Exception as error:
+            raise RuntimeError(
+                "The semantic analysis service is unavailable."
+            ) from error
+
+        _semantic_model = model
+        return model
+
+
+def reset_semantic_state() -> None:
+    """Clear process-local semantic state for isolated tests."""
+
+    global _semantic_model
+    with _model_lock:
+        _semantic_model = None
+    with _cache_lock:
+        _embedding_cache.clear()
+
+
+def _embedding_key(text: str) -> str:
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return ":".join(
+        (
+            settings.semantic_model_name,
+            PREPROCESSING_VERSION,
+            digest,
+        )
+    )
+
+
+def semantic_cache_size() -> int:
+    with _cache_lock:
+        return len(_embedding_cache)
 
 
 def clean_semantic_text(
@@ -297,11 +329,11 @@ def encode_texts(
     Encode text values using the cached semantic model.
     """
 
-    cleaned_texts = [
-        clean_semantic_text(text)
-        for text in texts
-        if clean_semantic_text(text)
-    ]
+    cleaned_texts = []
+    for text in texts:
+        cleaned = clean_semantic_text(text)
+        if cleaned:
+            cleaned_texts.append(cleaned)
 
     if not cleaned_texts:
         raise ValueError(
@@ -309,19 +341,52 @@ def encode_texts(
             "for encoding."
         )
 
-    model = get_semantic_model()
+    cache_limit = settings.semantic_result_cache_size
+    keys = [_embedding_key(text) for text in cleaned_texts]
 
-    embeddings = model.encode(
-        cleaned_texts,
-        convert_to_numpy=True,
-        normalize_embeddings=True,
-        show_progress_bar=False,
-    )
+    if cache_limit > 0:
+        with _cache_lock:
+            cached = [_embedding_cache.get(key) for key in keys]
+            if all(item is not None for item in cached):
+                for key in keys:
+                    _embedding_cache.move_to_end(key)
+                return np.stack(cached).astype(np.float32, copy=False)
 
-    return np.asarray(
-        embeddings,
-        dtype=np.float32,
-    )
+    with _inference_lock:
+        if cache_limit > 0:
+            with _cache_lock:
+                cached = [_embedding_cache.get(key) for key in keys]
+                missing_indexes = [
+                    index for index, item in enumerate(cached) if item is None
+                ]
+        else:
+            cached = [None] * len(keys)
+            missing_indexes = list(range(len(keys)))
+
+        if missing_indexes:
+            model = get_semantic_model()
+            encoded = np.asarray(
+                model.encode(
+                    [cleaned_texts[index] for index in missing_indexes],
+                    convert_to_numpy=True,
+                    normalize_embeddings=True,
+                    show_progress_bar=False,
+                ),
+                dtype=np.float32,
+            )
+            for index, embedding in zip(missing_indexes, encoded):
+                cached[index] = embedding
+
+            if cache_limit > 0:
+                with _cache_lock:
+                    for index in missing_indexes:
+                        key = keys[index]
+                        _embedding_cache[key] = cached[index]
+                        _embedding_cache.move_to_end(key)
+                    while len(_embedding_cache) > cache_limit:
+                        _embedding_cache.popitem(last=False)
+
+        return np.stack(cached).astype(np.float32, copy=False)
 
 
 def calculate_document_embedding(
@@ -488,3 +553,50 @@ def calculate_chunk_matches(
     return sorted_results[
         :top_k
     ]
+
+
+def calculate_semantic_analysis(
+    resume_text: str,
+    job_description: str,
+    top_k: int = 5,
+) -> tuple[float, list[dict]]:
+    """Calculate document similarity and chunk matches from one encoding pass."""
+
+    if top_k < 1:
+        raise ValueError("top_k must be at least 1.")
+
+    resume_chunks = create_text_chunks(resume_text)
+    job_chunks = create_text_chunks(job_description)
+    if not resume_chunks or not job_chunks:
+        return 0.0, []
+
+    resume_embeddings = encode_texts(resume_chunks)
+    job_embeddings = encode_texts(job_chunks)
+    resume_document = normalize_embedding(np.mean(resume_embeddings, axis=0))
+    job_document = normalize_embedding(np.mean(job_embeddings, axis=0))
+    score = convert_similarity_to_percentage(
+        calculate_cosine_score(resume_document, job_document)
+    )
+
+    matches = []
+    for resume_chunk, resume_embedding in zip(
+        resume_chunks,
+        resume_embeddings,
+    ):
+        similarities = np.dot(job_embeddings, resume_embedding)
+        best_index = int(np.argmax(similarities))
+        matches.append(
+            {
+                "resume_chunk": resume_chunk,
+                "job_description_chunk": job_chunks[best_index],
+                "similarity_percentage": convert_similarity_to_percentage(
+                    float(similarities[best_index])
+                ),
+            }
+        )
+
+    matches.sort(
+        key=lambda item: item["similarity_percentage"],
+        reverse=True,
+    )
+    return score, matches[:top_k]

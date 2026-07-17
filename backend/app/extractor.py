@@ -396,6 +396,7 @@ def extract_resume_information(text: str) -> dict:
 
     urls = extract_urls(text)
     categorized_skills = extract_skills(text)
+    flattened_skills = flatten_skills(categorized_skills)
 
     return {
         "name": extract_name(text),
@@ -403,9 +404,9 @@ def extract_resume_information(text: str) -> dict:
         "phone": extract_phone(text),
         "links": classify_urls(urls),
         "skills": {
-            "all": flatten_skills(categorized_skills),
+            "all": flattened_skills,
             "by_category": categorized_skills,
-            "total_detected": len(flatten_skills(categorized_skills)),
+            "total_detected": len(flattened_skills),
         },
         "education": extract_education_lines(text),
         "sections": extract_sections(text),
