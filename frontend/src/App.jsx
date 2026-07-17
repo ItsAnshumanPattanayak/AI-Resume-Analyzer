@@ -7,6 +7,8 @@ import {
 import AnalysisHistory from "./components/AnalysisHistory";
 import AnalysisModeTabs from "./components/AnalysisModeTabs";
 import AuthForm from "./components/AuthForm";
+import DeveloperSection from "./components/DeveloperSection";
+import Footer from "./components/Footer";
 import ImprovementOnlyResult from "./components/ImprovementOnlyResult";
 import ParsedResumeResult from "./components/ParsedResumeResult";
 import ResumeForm from "./components/ResumeForm";
@@ -359,7 +361,7 @@ function App() {
     <div className="app-shell">
       <UserHeader />
 
-      <main>
+      <main id="main-content">
         <section className="hero hero-compact">
           <div className="hero-copy">
             <p className="eyebrow">
@@ -404,13 +406,15 @@ function App() {
           />
         </section>
 
-        <AnalysisModeTabs
-          activeMode={activeMode}
-          onModeChange={
-            handleModeChange
-          }
-          disabled={loading}
-        />
+        <div id="analysis-workflow">
+          <AnalysisModeTabs
+            activeMode={activeMode}
+            onModeChange={
+              handleModeChange
+            }
+            disabled={loading}
+          />
+        </div>
 
         {loading && (
           <section
@@ -452,24 +456,23 @@ function App() {
           {renderResult()}
         </div>
 
-        <AnalysisHistory
-          records={historyRecords}
-          loading={historyLoading}
-          error={historyError}
-          onOpen={handleOpenHistory}
-          onDelete={
-            handleDeleteHistory
-          }
-          onRefresh={loadHistory}
-        />
+        <div id="analysis-history">
+          <AnalysisHistory
+            records={historyRecords}
+            loading={historyLoading}
+            error={historyError}
+            onOpen={handleOpenHistory}
+            onDelete={
+              handleDeleteHistory
+            }
+            onRefresh={loadHistory}
+          />
+        </div>
+
+        <DeveloperSection />
       </main>
 
-      <footer>
-        <p>
-          Your saved reports are private
-          to your authenticated account.
-        </p>
-      </footer>
+      <Footer onModeChange={handleModeChange} />
     </div>
   );
 }
