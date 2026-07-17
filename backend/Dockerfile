@@ -1,15 +1,20 @@
-FROM python:3.12-bookworm AS runtime
+FROM python:3.12-slim-bookworm AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PIP_NO_CACHE_DIR=1
+ENV TOKENIZERS_PARALLELISM=false
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY requirements-runtime.txt .
 
 RUN python -m pip install --upgrade pip \
-    && python -m pip install -r requirements.txt
+    && python -m pip install \
+        --index-url https://download.pytorch.org/whl/cpu \
+        torch==2.13.0 \
+    && python -m pip install \
+        -r requirements-runtime.txt
 
 COPY alembic.ini .
 COPY migrations ./migrations
