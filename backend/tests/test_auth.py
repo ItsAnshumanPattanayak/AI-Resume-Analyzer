@@ -167,6 +167,26 @@ def test_invalid_password_is_rejected(
     assert response.status_code == 401
 
 
+def test_validation_does_not_expose_password(
+    client: TestClient,
+    caplog,
+) -> None:
+    submitted_password = "recognizable-secret-value"
+
+    response = client.post(
+        "/api/auth/register",
+        json={
+            "name": "X",
+            "email": "not-an-email",
+            "password": submitted_password,
+        },
+    )
+
+    assert response.status_code == 422
+    assert submitted_password not in response.text
+    assert submitted_password not in caplog.text
+
+
 def test_current_user_requires_token(
     client: TestClient,
 ) -> None:

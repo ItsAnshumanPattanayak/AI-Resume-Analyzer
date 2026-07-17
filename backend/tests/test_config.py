@@ -334,3 +334,23 @@ def test_database_pool_settings() -> None:
         .database_pool_recycle_seconds
         == 3600
     )
+
+
+def test_rate_limit_defaults() -> None:
+    test_settings = create_test_settings(
+        rate_limit_enabled=True
+    )
+
+    assert Settings.model_fields[
+        "rate_limit_enabled"
+    ].default is True
+    assert test_settings.rate_limit_enabled is True
+    assert test_settings.rate_limit_window_seconds == 60
+    assert test_settings.rate_limit_registration_requests == 5
+    assert test_settings.rate_limit_login_requests == 10
+    assert test_settings.rate_limit_resume_requests == 10
+
+
+def test_unsupported_jwt_algorithm_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        create_test_settings(jwt_algorithm="none")

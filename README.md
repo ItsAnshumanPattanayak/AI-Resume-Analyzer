@@ -462,6 +462,12 @@ ACCESS_TOKEN_EXPIRE_MINUTES=60
 CORS_ORIGINS=["http://localhost:5173","http://127.0.0.1:5173"]
 ALLOW_LOCALHOST_ORIGIN_REGEX=true
 
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_WINDOW_SECONDS=60
+RATE_LIMIT_REGISTRATION_REQUESTS=5
+RATE_LIMIT_LOGIN_REQUESTS=10
+RATE_LIMIT_RESUME_REQUESTS=10
+
 MAXIMUM_FILE_SIZE_MB=5
 
 SEMANTIC_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
@@ -772,6 +778,7 @@ Uploaded resumes are checked for:
 * a supported extension;
 * non-empty file content;
 * configured maximum file size;
+* a PDF or DOCX content signature matching the extension;
 * extractable text.
 
 The default maximum upload size is:
@@ -782,24 +789,57 @@ The default maximum upload size is:
 
 Unsupported formats return an appropriate API error.
 
+Uploaded files are read only up to the configured size limit and are not
+deliberately persisted by the application. Original analysis results are
+stored in the authenticated user's history, however, and may contain personal
+information or extracted resume text until the user deletes the record.
+
+---
+
+## Rate Limiting
+
+Registration, login, parsing, analysis, role recommendation and improvement
+endpoints use configurable application-level rate limits. The defaults use a
+60-second window with limits of 5 registration requests, 10 login requests and
+10 resume-processing requests per client address.
+
+The limiter can be configured with the `RATE_LIMIT_*` environment variables
+shown above. It returns HTTP `429` with a `Retry-After` header when a limit is
+exceeded.
+
+The limiter is stored in each backend process. Counters are not shared across
+multiple replicas and it is not a replacement for gateway-level or distributed
+rate limiting.
+
 ---
 
 ## Security Notes
 
 Before using the application outside local development:
 
-1. Replace the example JWT secret.
+1. Generate a unique JWT secret; never reuse an example or commit `.env` files.
 2. Use a production database configuration.
 3. Restrict CORS to trusted frontend domains.
 4. Disable debug mode.
 5. Serve both frontend and backend over HTTPS.
 6. Avoid logging resume content or personal information.
 7. Review data-retention requirements for uploaded resume information.
-8. Add rate limiting and production monitoring.
+8. Add production monitoring and gateway-level abuse protection.
 9. Store secrets in the deployment platform's secret manager.
 10. Review authentication and dependency security before public deployment.
 
 The repository contains development-oriented defaults and is not presented as a production-hardened deployment.
+
+The frontend stores its bearer token in browser `localStorage`. This preserves
+the current client architecture but means a successful same-origin XSS attack
+could read the token. The application does not use secure-cookie authentication
+and `localStorage` should not be treated as a fully secure credential store.
+
+Docker Compose binds PostgreSQL and the direct backend port to the local host.
+The frontend and backend containers run without application-level root
+privileges. For production, set `CORS_ORIGINS` to the exact trusted frontend
+origins; localhost wildcard matching is disabled in the production Compose
+configuration.
 
 ---
 

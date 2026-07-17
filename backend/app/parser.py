@@ -1,5 +1,6 @@
 import io
 import re
+import zipfile
 from pathlib import Path
 
 import pymupdf
@@ -7,6 +8,41 @@ from docx import Document
 
 
 SUPPORTED_EXTENSIONS = {".pdf", ".docx"}
+
+
+def validate_resume_content(
+    extension: str,
+    file_bytes: bytes,
+) -> None:
+    """Validate basic file signatures before invoking document parsers."""
+
+    if extension == ".pdf":
+        if not file_bytes.startswith(b"%PDF-"):
+            raise ValueError(
+                "The uploaded file is not a valid PDF document."
+            )
+        return
+
+    if extension == ".docx":
+        try:
+            with zipfile.ZipFile(io.BytesIO(file_bytes)) as archive:
+                names = set(archive.namelist())
+        except (zipfile.BadZipFile, OSError):
+            raise ValueError(
+                "The uploaded file is not a valid DOCX document."
+            ) from None
+
+        required_entries = {
+            "[Content_Types].xml",
+            "word/document.xml",
+        }
+        if not required_entries.issubset(names):
+            raise ValueError(
+                "The uploaded file is not a valid DOCX document."
+            )
+        return
+
+    raise ValueError("Unsupported resume format.")
 
 
 def clean_text(text: str) -> str:
@@ -59,7 +95,7 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
                 extracted_pages.append(page_text)
 
     except Exception as error:
-        raise ValueError(f"Unable to read the PDF file: {error}") from error
+        raise ValueError("Unable to read the PDF file.") from error
 
     return clean_text("\n".join(extracted_pages))
 
@@ -95,7 +131,7 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
                     extracted_content.append(" | ".join(row_content))
 
     except Exception as error:
-        raise ValueError(f"Unable to read the DOCX file: {error}") from error
+        raise ValueError("Unable to read the DOCX file.") from error
 
     return clean_text("\n".join(extracted_content))
 

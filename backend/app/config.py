@@ -95,7 +95,7 @@ class Settings(BaseSettings):
         min_length=32,
     )
 
-    jwt_algorithm: str = "HS256"
+    jwt_algorithm: Literal["HS256"] = "HS256"
 
     access_token_expire_minutes: int = Field(
         default=60,
@@ -119,6 +119,32 @@ class Settings(BaseSettings):
         default=5,
         ge=1,
         le=50,
+    )
+
+    rate_limit_enabled: bool = True
+
+    rate_limit_window_seconds: int = Field(
+        default=60,
+        ge=1,
+        le=3600,
+    )
+
+    rate_limit_registration_requests: int = Field(
+        default=5,
+        ge=1,
+        le=1000,
+    )
+
+    rate_limit_login_requests: int = Field(
+        default=10,
+        ge=1,
+        le=1000,
+    )
+
+    rate_limit_resume_requests: int = Field(
+        default=10,
+        ge=1,
+        le=1000,
     )
 
     semantic_model_name: str = (
