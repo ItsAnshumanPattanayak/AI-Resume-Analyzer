@@ -189,6 +189,26 @@ Recommendations are based on:
 
 The API accepts a configurable `top_n` value and returns the highest-ranked roles.
 
+Each recommended role includes an explainable score breakdown. The final match
+percentage is calculated from the same values used to rank roles:
+
+```text
+final score = (exact skill coverage × 0.70)
+            + (semantic similarity × 0.30)
+```
+
+Exact skill coverage is the percentage of the role profile's required skills
+detected in the resume, including the limited aliases maintained in the
+application. Semantic similarity compares the resume text with the role
+profile text using the configured Sentence Transformer model. The response
+also identifies role-relevant matched skills, missing role skills, concise
+rule-based strengths, improvement areas, and the weighted component values.
+
+Recommendations are advisory only. They are not hiring probabilities,
+recruiter assessments, or guarantees of career suitability. Role profiles and
+their required-skill order are maintained in this repository; they do not
+represent live job-market requirements.
+
 These recommendations come from the role profiles included in the repository. They are not generated from live job-market data.
 
 ### 9. Resume Improvement Analysis

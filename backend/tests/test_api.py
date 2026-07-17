@@ -151,6 +151,97 @@ def test_resume_endpoint_requires_authentication(
     )
 
 
+def test_role_recommendation_endpoint_requires_authentication(
+    client,
+    simple_docx_bytes: bytes,
+) -> None:
+    response = client.post(
+        "/api/resume/recommend-roles",
+        files={
+            "file": (
+                "resume.docx",
+                simple_docx_bytes,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_role_recommendation_response_serializes_explanations(
+    client,
+    simple_docx_bytes: bytes,
+    auth_headers: dict[str, str],
+    monkeypatch,
+) -> None:
+    role = {
+        "role": "Example Engineer",
+        "overall_match_percentage": 70.0,
+        "recommendation_level": "Good fit",
+        "skill_match_percentage": 60.0,
+        "exact_skill_match_percentage": 60.0,
+        "semantic_match_percentage": 93.33,
+        "matched_skills": ["Python", "SQL"],
+        "missing_skills": ["Docker"],
+        "candidate_relevant_skills": ["Python", "SQL"],
+        "total_required_skills": 3,
+        "matched_skill_count": 2,
+        "missing_skill_count": 1,
+        "strengths": ["Matches 2 of 3 skills associated with this role."],
+        "improvement_areas": ["Consider strengthening Docker."],
+        "explanation": "Your resume matches 2 of 3 skills associated with this role.",
+        "score_components": {
+            "exact_skill_coverage": {
+                "score": 60.0,
+                "weight": 0.7,
+                "weighted_score": 42.0,
+            },
+            "semantic_similarity": {
+                "score": 93.33,
+                "weight": 0.3,
+                "weighted_score": 28.0,
+            },
+            "final_score": {"score": 70.0},
+        },
+        "role_description": "Example role.",
+        "reason": "Legacy reason.",
+    }
+    monkeypatch.setattr(
+        "app.main.recommend_job_roles",
+        lambda resume_text, top_n, candidate_skills: {
+            "candidate_skills": candidate_skills,
+            "total_candidate_skills": len(candidate_skills),
+            "scoring_weights": {
+                "skills": 0.7,
+                "semantic_similarity": 0.3,
+            },
+            "best_role": role,
+            "recommended_roles": [role],
+            "roles_evaluated": 1,
+        },
+    )
+
+    response = client.post(
+        "/api/resume/recommend-roles",
+        headers=auth_headers,
+        files={
+            "file": (
+                "resume.docx",
+                simple_docx_bytes,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["recommendations"]["best_role"]
+    assert payload["role"] == "Example Engineer"
+    assert payload["reason"] == "Legacy reason."
+    assert payload["explanation"].startswith("Your resume matches")
+    assert payload["score_components"]["final_score"]["score"] == 70.0
+
+
 def test_parse_docx_endpoint(
     client,
     simple_docx_bytes: bytes,
