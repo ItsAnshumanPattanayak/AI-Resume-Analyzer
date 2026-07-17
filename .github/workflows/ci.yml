@@ -4,123 +4,75 @@ on:
   push:
     branches:
       - main
-      - develop
-
   pull_request:
     branches:
       - main
-      - develop
-
   workflow_dispatch:
+    inputs:
+      run_semantic_tests:
+        description: Run tests that download the configured semantic model
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   backend-tests:
-    name: Backend Tests
+    name: Backend tests and coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-
-    services:
-      postgres:
-        image: postgres:17-alpine
-
-        env:
-          POSTGRES_DB: resume_analyzer_test
-          POSTGRES_USER: resume_user
-          POSTGRES_PASSWORD: resume_test_password
-
-        ports:
-          - 5432:5432
-
-        options: >-
-          --health-cmd="pg_isready -U resume_user -d resume_analyzer_test"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=10
+    timeout-minutes: 30
 
     defaults:
       run:
         working-directory: backend
 
     env:
-      APP_NAME: AI Resume Analyzer API
-      APP_VERSION: "1.5.0"
       APP_ENVIRONMENT: testing
       DEBUG: "false"
-
-      DATABASE_URL: postgresql+psycopg://resume_user:resume_test_password@localhost:5432/resume_analyzer_test
-
-      DATABASE_POOL_SIZE: "5"
-      DATABASE_MAX_OVERFLOW: "10"
-      DATABASE_POOL_TIMEOUT_SECONDS: "30"
-      DATABASE_POOL_RECYCLE_SECONDS: "1800"
-
-      JWT_SECRET_KEY: github-actions-test-secret-key-that-is-long-enough-for-testing-only
+      DATABASE_URL: sqlite:///./ci_test.db
+      JWT_SECRET_KEY: ci-only-secret-key-that-is-long-enough-for-tests
       JWT_ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: "60"
-
       CORS_ORIGINS: '["http://localhost:3000"]'
-      ALLOW_LOCALHOST_ORIGIN_REGEX: "true"
-
+      ALLOW_LOCALHOST_ORIGIN_REGEX: "false"
       MAXIMUM_FILE_SIZE_MB: "5"
-
       SEMANTIC_MODEL_NAME: sentence-transformers/all-MiniLM-L6-v2
-      SEMANTIC_MODEL_LOCAL_ONLY: "false"
-
-      LOG_LEVEL: INFO
-      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      SEMANTIC_MODEL_LOCAL_ONLY: "true"
+      LOG_LEVEL: WARNING
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: |
+            backend/requirements-runtime.txt
+            backend/requirements-dev.txt
 
-      - name: Show Python version
-        run: |
-          python --version
-          python -m pip --version
+      - name: Install backend development dependencies
+        run: python -m pip install -r requirements-dev.txt
 
-      - name: Install backend dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+      - name: Apply SQLite migrations
+        run: python -m alembic upgrade head
 
-      - name: Verify database connection
-        run: |
-          python -c "from sqlalchemy import create_engine, text; import os; engine = create_engine(os.environ['DATABASE_URL']); connection = engine.connect(); print(connection.execute(text('SELECT 1')).scalar()); connection.close()"
+      - name: Run non-semantic tests with coverage
+        run: >-
+          python -m pytest -m "not semantic"
+          --cov=app
+          --cov-report=term-missing
+          --cov-report=xml:coverage.xml
 
-      - name: Apply Alembic migrations
-        run: |
-          python -m alembic upgrade head
-
-      - name: Verify current migration
-        run: |
-          python -m alembic current
-
-      - name: Run backend tests
-        run: |
-          python -m pytest -v --tb=short
-
-      - name: Generate backend coverage report
-        run: |
-          python -m pytest \
-            --cov=app \
-            --cov-report=term-missing \
-            --cov-report=xml:coverage.xml
-
-      - name: Upload backend coverage
+      - name: Upload backend coverage report
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
@@ -128,11 +80,61 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  semantic-tests:
+    name: Semantic model tests (manual)
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.run_semantic_tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      APP_ENVIRONMENT: testing
+      DEBUG: "false"
+      DATABASE_URL: sqlite:///./semantic_ci_test.db
+      JWT_SECRET_KEY: ci-only-secret-key-that-is-long-enough-for-tests
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+      CORS_ORIGINS: '["http://localhost:3000"]'
+      ALLOW_LOCALHOST_ORIGIN_REGEX: "false"
+      SEMANTIC_MODEL_NAME: sentence-transformers/all-MiniLM-L6-v2
+      SEMANTIC_MODEL_LOCAL_ONLY: "false"
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      LOG_LEVEL: WARNING
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements-runtime.txt
+            backend/requirements-dev.txt
+
+      - name: Cache semantic model
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: semantic-model-${{ runner.os }}-${{ hashFiles('backend/requirements-runtime.txt') }}
+
+      - name: Install backend development dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run semantic tests
+        run: python -m pytest -m semantic
 
   frontend-tests:
-    name: Frontend Tests
+    name: Frontend lint, tests, and build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     defaults:
       run:
@@ -145,99 +147,51 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Show Node.js versions
-        run: |
-          node --version
-          npm --version
-
       - name: Install frontend dependencies
-        run: |
-          npm ci --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Run ESLint
-        run: |
-          npm run lint
+        run: npm run lint
 
       - name: Run frontend tests
-        run: |
-          npm run test:run
+        run: npm run test:run
 
-      - name: Build production frontend
-        run: |
-          npm run build
-
-      - name: Verify production build
-        run: |
-          test -f dist/index.html
-          test -d dist/assets
-
-      - name: Upload frontend production build
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend/dist
-          if-no-files-found: error
-          retention-days: 14
-
+      - name: Build frontend
+        run: npm run build
 
   docker-validation:
-    name: Docker Validation
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-
+    name: Validate Docker builds
     needs:
       - backend-tests
       - frontend-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Download frontend production build
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend/dist
-
-      - name: Verify frontend build
-        run: |
-          test -f frontend/dist/index.html
-          test -d frontend/dist/assets
+      - name: Validate Docker Compose configuration
+        env:
+          POSTGRES_DB: resume_analyzer_ci
+          POSTGRES_USER: resume_ci
+          POSTGRES_PASSWORD: ci-only-database-password
+          JWT_SECRET_KEY: ci-only-docker-secret-key-that-is-long-enough
+          JWT_ALGORITHM: HS256
+          ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+        run: docker compose -f compose.yaml config --quiet
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Validate Docker Compose configuration
-        env:
-          POSTGRES_DB: resume_analyzer
-          POSTGRES_USER: resume_user
-          POSTGRES_PASSWORD: ci-database-password
-          JWT_SECRET_KEY: github-actions-docker-validation-secret-key
-          JWT_ALGORITHM: HS256
-          ACCESS_TOKEN_EXPIRE_MINUTES: "60"
-        run: |
-          docker compose \
-            -f compose.yaml \
-            config --quiet
-
-      - name: Build frontend Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: false
-          tags: ai-resume-analyzer-frontend:ci
-          cache-from: type=gha,scope=frontend
-          cache-to: type=gha,mode=max,scope=frontend
-
-      - name: Build backend Docker image
+      - name: Build backend image
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -246,3 +200,15 @@ jobs:
           tags: ai-resume-analyzer-backend:ci
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          build-args: |
+            VITE_API_BASE_URL=/api
+          push: false
+          tags: ai-resume-analyzer-frontend:ci
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
