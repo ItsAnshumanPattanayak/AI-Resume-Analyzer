@@ -13,6 +13,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -45,6 +46,7 @@ from app.parser import (
     extract_resume_text,
     validate_resume_content,
 )
+from app.performance import measure_operation, measured_call
 from app.rate_limit import enforce_rate_limit
 from app.recommender import recommend_job_roles
 from app.schemas import (
@@ -57,8 +59,7 @@ from app.schemas import (
     UserResponse,
 )
 from app.semantic import (
-    calculate_chunk_matches,
-    calculate_semantic_similarity,
+    calculate_semantic_analysis,
 )
 from app.similarity import (
     calculate_combined_similarity,
@@ -214,9 +215,12 @@ async def read_and_validate_resume(
 
     validate_resume_content(extension, file_bytes)
 
-    extracted_text = extract_resume_text(
-        filename=safe_filename,
-        file_bytes=file_bytes,
+    extracted_text = await run_in_threadpool(
+        measured_call,
+        "resume_parsing",
+        extract_resume_text,
+        safe_filename,
+        file_bytes,
     )
 
     if not extracted_text:
@@ -479,10 +483,11 @@ async def parse_resume(
             )
         )
 
-        resume_information = (
-            extract_resume_information(
-                extracted_text
-            )
+        resume_information = await run_in_threadpool(
+            measured_call,
+            "resume_extraction",
+            extract_resume_information,
+            extracted_text,
         )
 
         result = {
@@ -565,37 +570,39 @@ async def analyze_resume(
             )
         )
 
-        parsed_data = (
-            extract_resume_information(
-                extracted_text
-            )
+        parsed_data = await run_in_threadpool(
+            measured_call,
+            "resume_extraction",
+            extract_resume_information,
+            extracted_text,
         )
 
-        skill_comparison = (
-            compare_resume_and_job_skills(
-                resume_text=extracted_text,
-                job_description=(
-                    cleaned_job_description
-                ),
-            )
+        resume_skills = parsed_data.get("skills", {}).get("all", [])
+
+        skill_comparison = await run_in_threadpool(
+            measured_call,
+            "skill_comparison",
+            compare_resume_and_job_skills,
+            extracted_text,
+            cleaned_job_description,
+            resume_skills,
         )
 
-        tfidf_similarity = (
-            calculate_tfidf_similarity(
-                resume_text=extracted_text,
-                job_description=(
-                    cleaned_job_description
-                ),
-            )
+        tfidf_similarity = await run_in_threadpool(
+            measured_call,
+            "tfidf_similarity",
+            calculate_tfidf_similarity,
+            extracted_text,
+            cleaned_job_description,
         )
 
-        semantic_similarity = (
-            calculate_semantic_similarity(
-                resume_text=extracted_text,
-                job_description=(
-                    cleaned_job_description
-                ),
-            )
+        semantic_similarity, top_semantic_matches = await run_in_threadpool(
+            measured_call,
+            "semantic_analysis",
+            calculate_semantic_analysis,
+            extracted_text,
+            cleaned_job_description,
+            5,
         )
 
         similarity_result = (
@@ -609,44 +616,32 @@ async def analyze_resume(
             )
         )
 
-        top_semantic_matches = (
-            calculate_chunk_matches(
-                resume_text=extracted_text,
-                job_description=(
-                    cleaned_job_description
-                ),
-                top_k=5,
-            )
+        role_recommendations = await run_in_threadpool(
+            measured_call,
+            "role_recommendation",
+            recommend_job_roles,
+            extracted_text,
+            5,
+            resume_skills,
         )
 
-        role_recommendations = (
-            recommend_job_roles(
-                resume_text=extracted_text,
-                top_n=5,
-            )
+        resume_quality = await run_in_threadpool(
+            measured_call,
+            "resume_improvement",
+            analyze_resume_quality,
+            extracted_text,
+            parsed_data,
+            skill_comparison,
         )
 
-        resume_quality = (
-            analyze_resume_quality(
-                resume_text=extracted_text,
-                parsed_data=parsed_data,
-                skill_comparison=(
-                    skill_comparison
-                ),
-            )
-        )
-
-        ats_result = calculate_ats_score(
-            resume_text=extracted_text,
-            parsed_data=parsed_data,
-            skill_comparison=(
-                skill_comparison
-            ),
-            content_similarity=(
-                similarity_result[
-                    "combined_percentage"
-                ]
-            ),
+        ats_result = await run_in_threadpool(
+            measured_call,
+            "ats_scoring",
+            calculate_ats_score,
+            extracted_text,
+            parsed_data,
+            skill_comparison,
+            similarity_result["combined_percentage"],
         )
 
         result = {
@@ -747,17 +742,20 @@ async def recommend_roles(
             )
         )
 
-        parsed_data = (
-            extract_resume_information(
-                extracted_text
-            )
+        parsed_data = await run_in_threadpool(
+            measured_call,
+            "resume_extraction",
+            extract_resume_information,
+            extracted_text,
         )
 
-        recommendations = (
-            recommend_job_roles(
-                resume_text=extracted_text,
-                top_n=top_n,
-            )
+        recommendations = await run_in_threadpool(
+            measured_call,
+            "role_recommendation",
+            recommend_job_roles,
+            extracted_text,
+            top_n,
+            parsed_data.get("skills", {}).get("all", []),
         )
 
         result = {
@@ -846,17 +844,19 @@ async def improve_resume(
             )
         )
 
-        parsed_data = (
-            extract_resume_information(
-                extracted_text
-            )
+        parsed_data = await run_in_threadpool(
+            measured_call,
+            "resume_extraction",
+            extract_resume_information,
+            extracted_text,
         )
 
-        improvement_result = (
-            analyze_resume_quality(
-                resume_text=extracted_text,
-                parsed_data=parsed_data,
-            )
+        improvement_result = await run_in_threadpool(
+            measured_call,
+            "resume_improvement",
+            analyze_resume_quality,
+            extracted_text,
+            parsed_data,
         )
 
         result = {

@@ -1,6 +1,7 @@
 from app.similarity import (
     calculate_combined_similarity,
     calculate_tfidf_similarity,
+    preprocess_text,
 )
 from app.skills import (
     compare_resume_and_job_skills,
@@ -73,3 +74,12 @@ def test_skill_comparison(
     assert 0 <= result[
         "skill_match_percentage"
     ] <= 100
+
+
+def test_preprocessing_preserves_technical_tokens() -> None:
+    processed = preprocess_text(
+        "C++ C# .NET Node.js CI/CD AWS SQL"
+    )
+
+    for token in ("c++", "c#", ".net", "node.js", "ci/cd", "aws", "sql"):
+        assert token in processed

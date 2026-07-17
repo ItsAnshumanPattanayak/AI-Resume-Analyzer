@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from sqlalchemy import inspect
 
 from app.database import Base
 from app.history import (
@@ -219,5 +220,28 @@ def test_users_cannot_read_each_others_records() -> None:
         assert len(first_user_records) == 1
         assert second_user_records == []
 
+    finally:
+        session.close()
+
+
+def test_history_list_defers_full_result_data() -> None:
+    session = create_test_session()
+
+    try:
+        user = create_test_user(session)
+        create_analysis_record(
+            session,
+            user_id=user.id,
+            analysis_type="parse",
+            filename="resume.docx",
+            result_data={"text": "large private report"},
+        )
+        user_id = user.id
+        session.expunge_all()
+
+        records = list_analysis_records(session, user_id=user_id)
+
+        assert len(records) == 1
+        assert "result_data" in inspect(records[0]).unloaded
     finally:
         session.close()

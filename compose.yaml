@@ -77,6 +77,8 @@ services:
         sentence-transformers/all-MiniLM-L6-v2
 
       SEMANTIC_MODEL_LOCAL_ONLY: "false"
+      SEMANTIC_RESULT_CACHE_SIZE: "32"
+      PERFORMANCE_LOGGING_ENABLED: "false"
       LOG_LEVEL: INFO
 
       HF_HOME: /app/model_cache

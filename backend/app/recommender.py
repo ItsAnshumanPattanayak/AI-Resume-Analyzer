@@ -1,11 +1,14 @@
 import json
+import hashlib
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from app.extractor import extract_skills, flatten_skills
-from app.semantic import get_semantic_model
+from app.config import settings
+from app.semantic import encode_texts
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -48,6 +51,7 @@ SKILL_ALIASES = {
 }
 
 
+@lru_cache(maxsize=1)
 def load_role_profiles() -> dict[str, dict[str, Any]]:
     """
     Load job-role profiles from the JSON file.
@@ -89,6 +93,13 @@ def normalize_skill(skill: str) -> str:
     )
 
 
+NORMALIZED_SKILL_ALIASES = {
+    normalize_skill(alias): canonical_name
+    for canonical_name, aliases in SKILL_ALIASES.items()
+    for alias in aliases
+}
+
+
 def canonicalize_skill(skill: str) -> str:
     """
     Convert aliases such as ML and machine learning
@@ -97,16 +108,10 @@ def canonicalize_skill(skill: str) -> str:
 
     normalized_skill = normalize_skill(skill)
 
-    for canonical_name, aliases in SKILL_ALIASES.items():
-        normalized_aliases = {
-            normalize_skill(alias)
-            for alias in aliases
-        }
-
-        if normalized_skill in normalized_aliases:
-            return canonical_name
-
-    return normalized_skill
+    return NORMALIZED_SKILL_ALIASES.get(
+        normalized_skill,
+        normalized_skill,
+    )
 
 
 def extract_candidate_skills(
@@ -188,6 +193,51 @@ def calculate_role_skill_match(
     }
 
 
+def build_role_texts(
+    role_profiles: dict[str, dict[str, Any]],
+) -> tuple[list[str], list[str]]:
+    role_names = list(role_profiles)
+    role_texts = [
+        (
+            f"{role_name}. {role_profiles[role_name].get('description', '')} "
+            "Required skills: "
+            f"{', '.join(role_profiles[role_name].get('required_skills', []))}"
+        )
+        for role_name in role_names
+    ]
+    return role_names, role_texts
+
+
+def role_profile_fingerprint(
+    role_profiles: dict[str, dict[str, Any]],
+) -> str:
+    serialized = json.dumps(
+        role_profiles,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(serialized).hexdigest()
+
+
+@lru_cache(maxsize=4)
+def get_static_role_embeddings(
+    model_name: str,
+    source_fingerprint: str,
+) -> tuple[tuple[str, ...], np.ndarray]:
+    """Encode static role references once per model and source version."""
+
+    del model_name, source_fingerprint
+    role_names, role_texts = build_role_texts(load_role_profiles())
+    embeddings = encode_texts(role_texts)
+    embeddings.setflags(write=False)
+    return tuple(role_names), embeddings
+
+
+def reset_recommender_caches() -> None:
+    load_role_profiles.cache_clear()
+    get_static_role_embeddings.cache_clear()
+
+
 def calculate_role_semantic_scores(
     resume_text: str,
     role_profiles: dict[str, dict[str, Any]],
@@ -203,46 +253,10 @@ def calculate_role_semantic_scores(
             for role_name in role_profiles
         }
 
-    role_names = list(role_profiles.keys())
-
-    role_texts = []
-
-    for role_name in role_names:
-        profile = role_profiles[role_name]
-
-        description = profile.get(
-            "description",
-            "",
-        )
-
-        required_skills = profile.get(
-            "required_skills",
-            [],
-        )
-
-        role_text = (
-            f"{role_name}. "
-            f"{description} "
-            f"Required skills: "
-            f"{', '.join(required_skills)}"
-        )
-
-        role_texts.append(role_text)
-
-    model = get_semantic_model()
-
-    resume_embedding = model.encode(
-        [resume_text],
-        convert_to_numpy=True,
-        normalize_embeddings=True,
-        show_progress_bar=False,
-    )[0]
-
-    role_embeddings = model.encode(
-        role_texts,
-        convert_to_numpy=True,
-        normalize_embeddings=True,
-        show_progress_bar=False,
+    resume_embedding = encode_texts([resume_text])[0]
+    role_names, role_embeddings = get_static_role_embeddings(
+        settings.semantic_model_name,
+        role_profile_fingerprint(role_profiles),
     )
 
     similarities = np.dot(
@@ -343,6 +357,7 @@ def build_role_reason(
 def recommend_job_roles(
     resume_text: str,
     top_n: int = 5,
+    candidate_skills: list[str] | None = None,
 ) -> dict[str, Any]:
     """
     Recommend suitable job roles based on candidate skills
@@ -354,16 +369,17 @@ def recommend_job_roles(
             "Resume text is required for role recommendation."
         )
 
-    if top_n < 1:
+    if not 1 <= top_n <= 10:
         raise ValueError(
-            "top_n must be at least 1."
+            "top_n must be between 1 and 10."
         )
 
     role_profiles = load_role_profiles()
 
-    candidate_skills = extract_candidate_skills(
-        resume_text
-    )
+    if candidate_skills is None:
+        candidate_skills = extract_candidate_skills(
+            resume_text
+        )
 
     semantic_scores = calculate_role_semantic_scores(
         resume_text=resume_text,
@@ -444,10 +460,12 @@ def recommend_job_roles(
         )
 
     recommendations.sort(
-        key=lambda item: item[
-            "overall_match_percentage"
-        ],
-        reverse=True,
+        key=lambda item: (
+            -item["overall_match_percentage"],
+            -item["skill_match_percentage"],
+            -item["semantic_match_percentage"],
+            item["role"].casefold(),
+        ),
     )
 
     limited_recommendations = recommendations[:top_n]

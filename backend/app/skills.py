@@ -21,13 +21,17 @@ def extract_flat_skills(text: str) -> list[str]:
 def compare_resume_and_job_skills(
     resume_text: str,
     job_description: str,
+    resume_skills: list[str] | None = None,
+    job_skills: list[str] | None = None,
 ) -> dict:
     """
     Compare resume skills with job-description skills.
     """
 
-    resume_skills = extract_flat_skills(resume_text)
-    job_skills = extract_flat_skills(job_description)
+    if resume_skills is None:
+        resume_skills = extract_flat_skills(resume_text)
+    if job_skills is None:
+        job_skills = extract_flat_skills(job_description)
 
     resume_skill_map = {
         normalize_skill(skill): skill

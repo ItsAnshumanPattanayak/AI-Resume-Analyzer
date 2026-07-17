@@ -550,6 +550,49 @@ export TRANSFORMERS_OFFLINE=1
 
 Semantic operations will fail with a clear error if local-only mode is enabled before the model has been downloaded.
 
+### Semantic performance behavior
+
+The Sentence Transformer is loaded lazily on the first semantic operation,
+not during module import or ordinary non-semantic requests. Initialization is
+protected so concurrent first requests create at most one model instance per
+backend process.
+
+Static role-profile embeddings are reused per process. Deterministic text
+embeddings use a bounded process-local cache keyed by the configured model,
+preprocessing version, and a SHA-256 digest of normalized text; raw resume text
+is not retained as a cache key. Configure or disable it with:
+
+```env
+SEMANTIC_RESULT_CACHE_SIZE=32
+```
+
+Set the value to `0` to disable result caching. Caches are not shared between
+workers or replicas and are lost on restart. Each process still holds its own
+model, so additional workers multiply model memory usage. The first semantic
+request remains slower than warm requests and may include model download time.
+
+Optional stage timing logs can be enabled with:
+
+```env
+PERFORMANCE_LOGGING_ENABLED=true
+```
+
+Timing logs contain operation names and elapsed milliseconds only; they do not
+include resume content, job descriptions, filenames, identities, or cache
+keys. Timings vary with hardware, model availability, document size, and cache
+state.
+
+Run the synthetic, non-threshold benchmark from `backend/`:
+
+```bash
+python benchmarks/benchmark_analysis.py --iterations 10
+python benchmarks/benchmark_analysis.py --iterations 5 --semantic
+```
+
+Use `--semantic` only when the configured model is already available or model
+download and resource use have been explicitly approved. Benchmark results are
+local observations, not production latency or scalability guarantees.
+
 ---
 
 ## Frontend Setup

@@ -1,4 +1,5 @@
 import {
+  fireEvent,
   render,
   screen,
 } from "@testing-library/react";
@@ -62,4 +63,40 @@ test("shows job description only in analysis mode", () => {
   expect(
     screen.getByLabelText(/job description/i),
   ).toBeInTheDocument();
+});
+
+test("prevents duplicate submissions while a request is pending", async () => {
+  let finishRequest;
+  const onSubmit = vi.fn(
+    () => new Promise((resolve) => {
+      finishRequest = resolve;
+    }),
+  );
+
+  render(
+    <ResumeForm
+      mode="parse"
+      onSubmit={onSubmit}
+      loading={false}
+    />,
+  );
+
+  const resume = new File(
+    ["resume"],
+    "resume.pdf",
+    { type: "application/pdf" },
+  );
+  fireEvent.change(
+    screen.getByLabelText("Resume"),
+    { target: { files: [resume] } },
+  );
+
+  const form = screen
+    .getByRole("button", { name: /parse resume/i })
+    .closest("form");
+  fireEvent.submit(form);
+  fireEvent.submit(form);
+
+  expect(onSubmit).toHaveBeenCalledTimes(1);
+  finishRequest();
 });
