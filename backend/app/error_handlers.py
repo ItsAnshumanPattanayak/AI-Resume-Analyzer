@@ -62,11 +62,20 @@ async def validation_exception_handler(
     Handle invalid request parameters and form fields.
     """
 
+    safe_errors = [
+        {
+            "type": error.get("type", "validation_error"),
+            "location": list(error.get("loc", ())),
+            "message": error.get("msg", "Invalid value."),
+        }
+        for error in exception.errors()
+    ]
+
     logger.warning(
-        "Validation error on %s %s: %s",
+        "Validation error on %s %s (%s issue(s)).",
         request.method,
         request.url.path,
-        exception.errors(),
+        len(safe_errors),
     )
 
     return JSONResponse(
@@ -79,7 +88,7 @@ async def validation_exception_handler(
                     "The request contains invalid or "
                     "missing data."
                 ),
-                "details": exception.errors(),
+                "details": safe_errors,
             },
         },
     )
@@ -138,8 +147,9 @@ async def unexpected_exception_handler(
     sensitive implementation details.
     """
 
-    logger.exception(
-        "Unexpected error on %s %s",
+    logger.error(
+        "Unexpected %s on %s %s",
+        type(exception).__name__,
         request.method,
         request.url.path,
     )

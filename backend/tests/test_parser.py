@@ -4,6 +4,7 @@ from app.parser import (
     clean_text,
     extract_resume_text,
     extract_text_from_docx,
+    validate_resume_content,
 )
 
 
@@ -61,3 +62,19 @@ def test_reject_empty_file() -> None:
             filename="resume.pdf",
             file_bytes=b"",
         )
+
+
+def test_rejects_invalid_pdf_signature() -> None:
+    with pytest.raises(ValueError, match="valid PDF"):
+        validate_resume_content(".pdf", b"not-a-pdf")
+
+
+def test_rejects_invalid_docx_container() -> None:
+    with pytest.raises(ValueError, match="valid DOCX"):
+        validate_resume_content(".docx", b"not-a-zip-file")
+
+
+def test_accepts_valid_docx_container(
+    simple_docx_bytes: bytes,
+) -> None:
+    validate_resume_content(".docx", simple_docx_bytes)

@@ -14,7 +14,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
 
     healthcheck:
       test:
@@ -54,10 +54,16 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
 
       CORS_ORIGINS: >-
-        ["http://localhost:3000","http://127.0.0.1:3000"]
+        ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
 
-      ALLOW_LOCALHOST_ORIGIN_REGEX: "true"
+      ALLOW_LOCALHOST_ORIGIN_REGEX: "false"
       MAXIMUM_FILE_SIZE_MB: "5"
+
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_WINDOW_SECONDS: "60"
+      RATE_LIMIT_REGISTRATION_REQUESTS: "5"
+      RATE_LIMIT_LOGIN_REQUESTS: "10"
+      RATE_LIMIT_RESUME_REQUESTS: "10"
 
       SEMANTIC_MODEL_NAME: >-
         sentence-transformers/all-MiniLM-L6-v2
@@ -71,7 +77,7 @@ services:
       - huggingface_cache:/app/model_cache
 
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
 
     depends_on:
       database:
@@ -101,7 +107,7 @@ services:
     restart: unless-stopped
 
     ports:
-      - "3000:80"
+      - "3000:8080"
 
     depends_on:
       backend:

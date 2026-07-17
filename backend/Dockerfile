@@ -21,6 +21,13 @@ COPY migrations ./migrations
 COPY app ./app
 COPY data ./data
 
+RUN groupadd --system --gid 10001 app \
+    && useradd --system --uid 10001 --gid app --create-home app \
+    && mkdir -p /app/model_cache \
+    && chown -R app:app /app
+
+USER app
+
 EXPOSE 8000
 
 CMD ["sh", "-c", "python -m alembic upgrade head && exec python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]

@@ -9,9 +9,12 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Request,
     UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.advisor import analyze_resume_quality
@@ -40,7 +43,9 @@ from app.models import User
 from app.parser import (
     SUPPORTED_EXTENSIONS,
     extract_resume_text,
+    validate_resume_content,
 )
+from app.rate_limit import enforce_rate_limit
 from app.recommender import recommend_job_roles
 from app.schemas import (
     AccessTokenResponse,
@@ -150,7 +155,7 @@ AuthenticatedUser = Annotated[
 
 async def read_and_validate_resume(
     file: UploadFile,
-) -> tuple[bytes, str]:
+) -> tuple[bytes, str, str]:
     """
     Validate an uploaded resume and extract its text.
 
@@ -167,9 +172,8 @@ async def read_and_validate_resume(
             ),
         )
 
-    extension = Path(
-        file.filename
-    ).suffix.lower()
+    safe_filename = sanitize_filename(file.filename)
+    extension = Path(safe_filename).suffix.lower()
 
     if extension not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
@@ -184,7 +188,9 @@ async def read_and_validate_resume(
             },
         )
 
-    file_bytes = await file.read()
+    file_bytes = await file.read(
+        settings.maximum_file_size_bytes + 1
+    )
 
     if not file_bytes:
         raise HTTPException(
@@ -206,8 +212,10 @@ async def read_and_validate_resume(
             ),
         )
 
+    validate_resume_content(extension, file_bytes)
+
     extracted_text = extract_resume_text(
-        filename=file.filename,
+        filename=safe_filename,
         file_bytes=file_bytes,
     )
 
@@ -221,7 +229,23 @@ async def read_and_validate_resume(
             ),
         )
 
-    return file_bytes, extracted_text
+    return file_bytes, extracted_text, safe_filename
+
+
+def sanitize_filename(filename: str) -> str:
+    """Return a bounded display filename without path or control data."""
+
+    basename = Path(
+        filename.replace("\\", "/")
+    ).name
+    cleaned = "".join(
+        character
+        for character in basename
+        if character.isprintable()
+        and character not in {"/", "\\"}
+    ).strip()
+
+    return cleaned[:255] or "resume"
 
 
 def save_analysis_result(
@@ -277,10 +301,21 @@ def home() -> dict:
 
 
 @app.get("/health")
-def health_check() -> dict:
+def health_check(
+    database_session: DatabaseSession,
+) -> dict:
     """
     Check whether the backend is running.
     """
+
+    try:
+        database_session.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        logger.error("Database health check failed.")
+        raise HTTPException(
+            status_code=503,
+            detail="Database health check failed.",
+        ) from None
 
     return {
         "status": "healthy",
@@ -300,12 +335,19 @@ def health_check() -> dict:
     status_code=201,
 )
 def register_user(
+    request_context: Request,
     request: UserRegisterRequest,
     database_session: DatabaseSession,
 ) -> User:
     """
     Register a new application user.
     """
+
+    enforce_rate_limit(
+        request_context,
+        category="registration",
+        limit=settings.rate_limit_registration_requests,
+    )
 
     cleaned_name = request.name.strip()
 
@@ -345,12 +387,19 @@ def register_user(
     response_model=AccessTokenResponse,
 )
 def login_user(
+    request_context: Request,
     request: UserLoginRequest,
     database_session: DatabaseSession,
 ) -> AccessTokenResponse:
     """
     Authenticate a user and issue a JWT.
     """
+
+    enforce_rate_limit(
+        request_context,
+        category="login",
+        limit=settings.rate_limit_login_requests,
+    )
 
     user = authenticate_user(
         database_session,
@@ -408,6 +457,7 @@ def get_authenticated_user(
 
 @app.post("/api/resume/parse")
 async def parse_resume(
+    request: Request,
     current_user: AuthenticatedUser,
     database_session: DatabaseSession,
     file: UploadFile = File(...),
@@ -417,13 +467,13 @@ async def parse_resume(
     """
 
     try:
-        logger.info(
-            "Parsing resume for user %s: %s",
-            current_user.id,
-            file.filename,
+        enforce_rate_limit(
+            request,
+            category="resume-parse",
+            limit=settings.rate_limit_resume_requests,
         )
 
-        file_bytes, extracted_text = (
+        file_bytes, extracted_text, safe_filename = (
             await read_and_validate_resume(
                 file
             )
@@ -437,7 +487,7 @@ async def parse_resume(
 
         result = {
             "success": True,
-            "filename": file.filename,
+            "filename": safe_filename,
             "content_type": (
                 file.content_type
             ),
@@ -460,16 +510,13 @@ async def parse_resume(
             database_session,
             current_user=current_user,
             analysis_type="parse",
-            filename=file.filename,
+            filename=safe_filename,
             result=result,
         )
 
         result["history_id"] = history_id
 
-        logger.info(
-            "Resume parsed successfully: %s",
-            file.filename,
-        )
+        logger.info("Resume parsed successfully for user %s.", current_user.id)
 
         return result
 
@@ -479,6 +526,7 @@ async def parse_resume(
 
 @app.post("/api/resume/analyze")
 async def analyze_resume(
+    request: Request,
     current_user: AuthenticatedUser,
     database_session: DatabaseSession,
     file: UploadFile = File(...),
@@ -505,16 +553,13 @@ async def analyze_resume(
                 ),
             )
 
-        logger.info(
-            (
-                "Starting full resume analysis "
-                "for user %s: %s"
-            ),
-            current_user.id,
-            file.filename,
+        enforce_rate_limit(
+            request,
+            category="resume-analysis",
+            limit=settings.rate_limit_resume_requests,
         )
 
-        file_bytes, extracted_text = (
+        file_bytes, extracted_text, safe_filename = (
             await read_and_validate_resume(
                 file
             )
@@ -606,7 +651,7 @@ async def analyze_resume(
 
         result = {
             "success": True,
-            "filename": file.filename,
+            "filename": safe_filename,
             "content_type": (
                 file.content_type
             ),
@@ -646,7 +691,7 @@ async def analyze_resume(
             database_session,
             current_user=current_user,
             analysis_type="analyze",
-            filename=file.filename,
+            filename=safe_filename,
             result=result,
         )
 
@@ -654,10 +699,8 @@ async def analyze_resume(
 
         logger.info(
             (
-                "Full analysis completed: %s "
-                "| user=%s | ATS=%s"
+                "Full analysis completed for user=%s | ATS=%s"
             ),
-            file.filename,
             current_user.id,
             ats_result["overall_score"],
         )
@@ -672,6 +715,7 @@ async def analyze_resume(
     "/api/resume/recommend-roles"
 )
 async def recommend_roles(
+    request: Request,
     current_user: AuthenticatedUser,
     database_session: DatabaseSession,
     file: UploadFile = File(...),
@@ -691,16 +735,13 @@ async def recommend_roles(
                 ),
             )
 
-        logger.info(
-            (
-                "Generating role recommendations "
-                "for user %s: %s"
-            ),
-            current_user.id,
-            file.filename,
+        enforce_rate_limit(
+            request,
+            category="resume-roles",
+            limit=settings.rate_limit_resume_requests,
         )
 
-        file_bytes, extracted_text = (
+        file_bytes, extracted_text, safe_filename = (
             await read_and_validate_resume(
                 file
             )
@@ -721,7 +762,7 @@ async def recommend_roles(
 
         result = {
             "success": True,
-            "filename": file.filename,
+            "filename": safe_filename,
             "content_type": (
                 file.content_type
             ),
@@ -762,7 +803,7 @@ async def recommend_roles(
             database_session,
             current_user=current_user,
             analysis_type="roles",
-            filename=file.filename,
+            filename=safe_filename,
             result=result,
         )
 
@@ -770,10 +811,8 @@ async def recommend_roles(
 
         logger.info(
             (
-                "Role recommendations completed: "
-                "%s | user=%s"
+                "Role recommendations completed for user=%s"
             ),
-            file.filename,
             current_user.id,
         )
 
@@ -785,6 +824,7 @@ async def recommend_roles(
 
 @app.post("/api/resume/improve")
 async def improve_resume(
+    request: Request,
     current_user: AuthenticatedUser,
     database_session: DatabaseSession,
     file: UploadFile = File(...),
@@ -794,16 +834,13 @@ async def improve_resume(
     """
 
     try:
-        logger.info(
-            (
-                "Running resume improvement "
-                "analysis for user %s: %s"
-            ),
-            current_user.id,
-            file.filename,
+        enforce_rate_limit(
+            request,
+            category="resume-improvement",
+            limit=settings.rate_limit_resume_requests,
         )
 
-        file_bytes, extracted_text = (
+        file_bytes, extracted_text, safe_filename = (
             await read_and_validate_resume(
                 file
             )
@@ -824,7 +861,7 @@ async def improve_resume(
 
         result = {
             "success": True,
-            "filename": file.filename,
+            "filename": safe_filename,
             "content_type": (
                 file.content_type
             ),
@@ -868,7 +905,7 @@ async def improve_resume(
             database_session,
             current_user=current_user,
             analysis_type="improve",
-            filename=file.filename,
+            filename=safe_filename,
             result=result,
         )
 
@@ -876,10 +913,8 @@ async def improve_resume(
 
         logger.info(
             (
-                "Resume improvement completed: "
-                "%s | user=%s"
+                "Resume improvement completed for user=%s"
             ),
-            file.filename,
             current_user.id,
         )
 

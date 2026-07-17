@@ -1,6 +1,10 @@
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.database import get_database_session
+from app.main import app
 
 
 @pytest.fixture
@@ -87,6 +91,27 @@ def test_health_endpoint(
         data["authentication"]
         == "enabled"
     )
+
+
+def test_health_endpoint_reports_database_failure(client) -> None:
+    class UnavailableDatabaseSession:
+        def execute(self, statement):
+            raise SQLAlchemyError("private database detail")
+
+    def override_database_session():
+        yield UnavailableDatabaseSession()
+
+    app.dependency_overrides[get_database_session] = (
+        override_database_session
+    )
+
+    try:
+        response = client.get("/health")
+    finally:
+        app.dependency_overrides.pop(get_database_session, None)
+
+    assert response.status_code == 503
+    assert "private database detail" not in response.text
 
 
 def test_resume_endpoint_requires_authentication(
@@ -460,3 +485,44 @@ def test_delete_history_record(
         get_response.status_code
         == 404
     )
+
+
+def test_rejects_misleading_pdf_extension(
+    client,
+    auth_headers,
+) -> None:
+    response = client.post(
+        "/api/resume/parse",
+        headers=auth_headers,
+        files={
+            "file": (
+                "resume.pdf",
+                b"this is not a PDF",
+                "application/pdf",
+            )
+        },
+    )
+
+    assert response.status_code == 422
+    assert "valid PDF" in response.text
+
+
+def test_uploaded_filename_is_normalized(
+    client,
+    auth_headers,
+    simple_docx_bytes: bytes,
+) -> None:
+    response = client.post(
+        "/api/resume/parse",
+        headers=auth_headers,
+        files={
+            "file": (
+                "../../private/resume.docx",
+                simple_docx_bytes,
+                "application/octet-stream",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["filename"] == "resume.docx"
