@@ -56,6 +56,15 @@ a {
   text-decoration: none;
 }
 
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid #65e0c4;
+  outline-offset: 3px;
+}
+
 .app-shell {
   min-height: 100vh;
 }
@@ -723,14 +732,224 @@ textarea:focus {
   line-height: 1.7;
 }
 
-footer {
+.developer-section {
+  padding: 12px 0 76px;
+}
+
+.developer-card {
+  padding: 30px;
+  border: 1px solid rgba(139, 161, 190, 0.17);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(30, 49, 91, 0.55), rgba(13, 25, 43, 0.88)),
+    rgba(13, 25, 43, 0.88);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
+}
+
+.developer-heading,
+.developer-intro,
+.developer-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.developer-heading h2,
+.developer-intro h3,
+.developer-technologies h3,
+.project-footer h2 {
+  margin: 0;
+}
+
+.developer-icon-wrap {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(101, 224, 196, 0.24);
+  border-radius: 15px;
+  color: #91f0d7;
+  background: rgba(24, 107, 92, 0.2);
+}
+
+.developer-icon {
+  width: 31px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.developer-intro {
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-top: 28px;
+}
+
+.developer-title {
+  margin: 7px 0 0;
+  color: #65e0c4;
+  font-weight: 800;
+}
+
+.developer-subtitle,
+.developer-description,
+.project-footer p,
+.project-footer address {
+  color: #a4b1c4;
+  line-height: 1.65;
+}
+
+.developer-subtitle {
+  margin: 3px 0 0;
+  font-size: 0.9rem;
+}
+
+.developer-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.developer-details div {
+  padding: 11px 13px;
+  border: 1px solid rgba(137, 157, 188, 0.13);
+  border-radius: 12px;
+  background: rgba(7, 17, 30, 0.35);
+}
+
+.developer-details dt {
+  color: #8496af;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.developer-details dd {
+  margin: 5px 0 0;
+  color: #dfe5ff;
+  font-size: 0.83rem;
+  font-weight: 700;
+}
+
+.developer-description {
+  max-width: 860px;
+  margin: 24px 0 0;
+}
+
+.developer-technologies {
+  margin-top: 25px;
+}
+
+.developer-technologies h3 {
+  font-size: 0.9rem;
+}
+
+.technology-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding: 0;
+  margin: 12px 0 0;
+  list-style: none;
+}
+
+.technology-badges li {
+  padding: 7px 10px;
+  color: #b8d7ff;
+  border: 1px solid rgba(102, 121, 255, 0.29);
+  border-radius: 999px;
+  background: rgba(75, 94, 196, 0.16);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.developer-actions {
+  margin-top: 26px;
+}
+
+.developer-actions .primary-button {
+  width: auto;
+  margin: 0;
+}
+
+.developer-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.project-footer {
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 25px 0 35px;
-  color: #6f809a;
-  text-align: center;
-  font-size: 0.78rem;
+  padding: 32px 0 35px;
+  border-top: 1px solid rgba(142, 161, 189, 0.14);
+}
+
+.project-footer-grid {
+  display: grid;
+  grid-template-columns: 1.25fr 0.8fr 1fr;
+  gap: 42px;
+}
+
+.project-footer h2 {
+  color: #dfe5ff;
+  font-size: 0.95rem;
+}
+
+.project-footer p {
+  margin: 11px 0 0;
+  font-size: 0.84rem;
+}
+
+.project-footer ul {
+  display: grid;
+  gap: 9px;
+  padding: 0;
+  margin: 12px 0 0;
+  list-style: none;
+}
+
+.project-footer a {
+  color: #b8c6d9;
+  font-size: 0.84rem;
+  transition: color 0.2s ease;
+}
+
+.project-footer a:hover {
+  color: #91f0d7;
+}
+
+.project-footer address {
+  display: flex;
+  flex-direction: column;
+  font-style: normal;
+}
+
+.project-footer address p {
+  margin-top: 4px;
+}
+
+.project-footer address a {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+
+.project-footer-bottom {
+  margin-top: 28px;
+  padding-top: 20px;
   border-top: 1px solid rgba(142, 161, 189, 0.11);
+  text-align: center;
+}
+
+.project-footer-bottom p {
+  margin: 5px 0;
+  color: #71829b;
+  font-size: 0.76rem;
 }
 
 @media (max-width: 980px) {
@@ -794,6 +1013,17 @@ footer {
   .role-breakdown dl div {
     flex-direction: column;
     gap: 3px;
+  }
+
+  .developer-intro,
+  .developer-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .project-footer-grid {
+    grid-template-columns: 1fr;
+    gap: 28px;
   }
 }
 .mode-selector {
@@ -909,6 +1139,28 @@ select:focus {
   .mode-tabs,
   .information-grid {
     grid-template-columns: 1fr;
+  }
+
+  .developer-card {
+    padding: 22px;
+  }
+
+  .developer-heading {
+    align-items: flex-start;
+  }
+
+  .developer-details {
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .developer-actions {
+    align-items: stretch;
+  }
+
+  .developer-actions .primary-button,
+  .developer-actions .secondary-button {
+    width: 100%;
   }
 }
 .history-section {
