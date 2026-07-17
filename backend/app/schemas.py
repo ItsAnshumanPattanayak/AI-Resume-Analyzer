@@ -184,3 +184,72 @@ class RoleRecommendationResponse(BaseModel):
     candidate: RoleRecommendationCandidate
     recommendations: RoleRecommendationsPayload
     history_id: int = Field(ge=1)
+
+
+class ResumeFeedbackIssue(BaseModel):
+    """A deterministic, privacy-safe resume feedback item."""
+
+    id: str
+    category: str
+    priority: str
+    message: str
+    evidence: str | None = None
+
+
+class ResumeSectionFeedback(BaseModel):
+    section_name: str
+    detected: bool
+    strengths: list[str]
+    issues: list[ResumeFeedbackIssue]
+    suggestions: list[str]
+    priority: str
+    evidence: str | None = None
+
+
+class ResumeBulletFeedback(BaseModel):
+    id: str
+    section_name: str
+    evidence: str
+    issues: list[ResumeFeedbackIssue]
+
+
+class ResumeImprovementPayload(BaseModel):
+    """Backward-compatible deterministic resume feedback payload."""
+
+    quality_score: float = Field(ge=0, le=100)
+    quality_rating: str
+    summary_analysis: dict[str, Any]
+    section_analysis: dict[str, Any]
+    action_verb_analysis: dict[str, Any]
+    quantified_achievement_lines: list[str]
+    weak_phrases: list[dict[str, str]]
+    possible_vague_lines: list[str]
+    repeated_words: list[dict[str, Any]]
+    priority_recommendations: list[dict[str, str]]
+    bullet_point_templates: list[str]
+    overall_feedback_summary: str
+    section_feedback: list[ResumeSectionFeedback]
+    bullet_feedback: list[ResumeBulletFeedback]
+    content_issues: list[ResumeFeedbackIssue]
+    readability_issues: list[ResumeFeedbackIssue]
+    action_verb_feedback: dict[str, Any]
+    quantification_opportunities: list[ResumeFeedbackIssue]
+    repetition_issues: list[ResumeFeedbackIssue]
+    contact_information_feedback: dict[str, Any]
+    skills_feedback: dict[str, Any]
+    priority_actions: list[dict[str, str]]
+    strengths: list[str]
+    limitations: list[str]
+    disclaimer: str
+
+
+class ResumeImprovementResponse(BaseModel):
+    """Documented response for the authenticated improvement endpoint."""
+
+    success: bool
+    filename: str
+    content_type: str | None
+    file_size_bytes: int = Field(ge=0)
+    candidate: dict[str, Any]
+    resume_improvement: ResumeImprovementPayload
+    history_id: int = Field(ge=1)

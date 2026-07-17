@@ -8,6 +8,9 @@ function ImprovementPanel({ improvement }) {
 
   const weakPhrases = improvement.weak_phrases || [];
   const templates = improvement.bullet_point_templates || [];
+  const priorityActions = improvement.priority_actions || [];
+  const sectionFeedback = improvement.section_feedback || [];
+  const bulletFeedback = improvement.bullet_feedback || [];
 
   return (
     <section className="result-section">
@@ -49,6 +52,68 @@ function ImprovementPanel({ improvement }) {
           </p>
         )}
       </div>
+
+      {improvement.overall_feedback_summary && (
+        <div className="feedback-summary">
+          <h3>Feedback summary</h3>
+          <p>{improvement.overall_feedback_summary}</p>
+        </div>
+      )}
+
+      {priorityActions.length > 0 && (
+        <div className="subsection">
+          <h3>First actions to take</h3>
+          <ol className="priority-actions">
+            {priorityActions.map((action) => (
+              <li key={action.id}>
+                <strong>{action.priority} priority:</strong>{" "}
+                {action.action}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {sectionFeedback.length > 0 && (
+        <div className="subsection">
+          <h3>Section feedback</h3>
+          <div className="feedback-details-list">
+            {sectionFeedback.map((section) => (
+              <details key={section.section_name}>
+                <summary>
+                  {section.section_name} — {section.detected ? "detected" : "not detected"}
+                </summary>
+                {section.strengths?.map((strength) => (
+                  <p key={strength}>{strength}</p>
+                ))}
+                {section.issues?.map((issue) => (
+                  <p key={issue.id}>{issue.message}</p>
+                ))}
+                {section.suggestions?.map((suggestion) => (
+                  <p key={suggestion}>{suggestion}</p>
+                ))}
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {bulletFeedback.length > 0 && (
+        <div className="subsection">
+          <h3>Bullet feedback</h3>
+          <div className="feedback-details-list">
+            {bulletFeedback.map((bullet) => (
+              <details key={bullet.id}>
+                <summary>{bullet.section_name} bullet</summary>
+                <p>{bullet.evidence}</p>
+                {bullet.issues?.map((issue) => (
+                  <p key={issue.id}>{issue.message}</p>
+                ))}
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
 
       {weakPhrases.length > 0 && (
         <div className="subsection">

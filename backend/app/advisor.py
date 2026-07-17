@@ -96,6 +96,95 @@ STOP_WORDS = {
 }
 
 
+PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+MAX_FEEDBACK_ITEMS = 12
+MAX_EVIDENCE_LENGTH = 180
+WEAK_OPENINGS = {
+    "worked": "Describe the specific contribution with a truthful action verb.",
+    "helped": "Clarify the contribution without overstating ownership.",
+    "responsible": "State the work completed and the outcome where available.",
+    "involved": "State the specific contribution and technology used.",
+    "participated": "Describe the contribution made to the work.",
+}
+GENERIC_PHRASES = {
+    "hardworking",
+    "team player",
+    "quick learner",
+    "passionate",
+    "good communication skills",
+    "various tasks",
+    "many projects",
+    "excellent skills",
+}
+SECTION_LABELS = {
+    "summary": "Summary",
+    "skills": "Skills",
+    "experience": "Experience",
+    "projects": "Projects",
+    "education": "Education",
+    "certifications": "Certifications",
+    "achievements": "Achievements",
+    "contact": "Contact information",
+}
+
+
+def redact_evidence(value: str) -> str:
+    """Return a short excerpt without contact or address-like data."""
+
+    redacted = re.sub(
+        r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+        "[email removed]",
+        value,
+    )
+    redacted = re.sub(
+        r"(?:\+?\d[\d\s().-]{7,}\d)",
+        "[phone removed]",
+        redacted,
+    )
+    redacted = re.sub(r"https?://\S+|www\.\S+", "[link removed]", redacted)
+    redacted = re.sub(
+        r"\b\d{1,5}\s+[A-Za-z][A-Za-z .'-]{2,}\s(?:street|st|road|rd|avenue|ave|lane|ln)\b",
+        "[address removed]",
+        redacted,
+        flags=re.IGNORECASE,
+    )
+    return re.sub(r"\s+", " ", redacted).strip()[:MAX_EVIDENCE_LENGTH]
+
+
+def make_issue(
+    issue_id: str,
+    category: str,
+    priority: str,
+    message: str,
+    evidence: str | None = None,
+) -> dict[str, str]:
+    """Create one stable, JSON-safe feedback issue."""
+
+    issue = {
+        "id": issue_id,
+        "category": category,
+        "priority": priority,
+        "message": message,
+    }
+    if evidence:
+        issue["evidence"] = redact_evidence(evidence)
+    return issue
+
+
+def stable_issues(issues: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Deduplicate and order issues independently of input order."""
+
+    unique = {item["id"]: item for item in issues}
+    return sorted(
+        unique.values(),
+        key=lambda item: (
+            PRIORITY_ORDER.get(item["priority"], 3),
+            item["category"],
+            item["id"],
+        ),
+    )[:MAX_FEEDBACK_ITEMS]
+
+
 def get_nonempty_lines(text: str) -> list[str]:
     """
     Return cleaned, non-empty resume lines.
@@ -106,6 +195,139 @@ def get_nonempty_lines(text: str) -> list[str]:
         for line in text.splitlines()
         if line.strip()
     ]
+
+
+def normalized_text(value: str) -> str:
+    """Normalize text for deterministic, lightweight comparisons."""
+
+    return re.sub(r"[^a-z0-9+#.]+", " ", value.lower()).strip()
+
+
+def extract_feedback_bullets(
+    parsed_data: dict[str, Any],
+    resume_text: str,
+) -> list[dict[str, str]]:
+    """Extract bounded experience/project bullets with a paragraph fallback."""
+
+    sections = parsed_data.get("sections", {})
+    bullets: list[dict[str, str]] = []
+
+    for section_name in ("experience", "projects"):
+        for line in get_nonempty_lines(sections.get(section_name, "")):
+            cleaned = re.sub(r"^[\u2022•*\-–—\d.)\s]+", "", line).strip()
+            if len(cleaned.split()) >= 3:
+                bullets.append({"section_name": section_name, "text": cleaned})
+
+    if not bullets:
+        for line in get_nonempty_lines(resume_text):
+            if is_probable_heading(line) or re.search(r"@|https?://|\+?\d{10,}", line):
+                continue
+            if len(line.split()) >= 6:
+                bullets.append({"section_name": "resume", "text": line})
+
+    return bullets[:MAX_FEEDBACK_ITEMS]
+
+
+def analyze_bullets(
+    parsed_data: dict[str, Any],
+    resume_text: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """Analyze project/experience bullets without rewriting their claims."""
+
+    bullets = extract_feedback_bullets(parsed_data, resume_text)
+    results: list[dict[str, Any]] = []
+    all_issues: list[dict[str, str]] = []
+    opening_counts: Counter[str] = Counter()
+
+    for index, bullet in enumerate(bullets, start=1):
+        text = bullet["text"]
+        words = text.split()
+        first_match = re.match(r"^[^A-Za-z]*([A-Za-z]+)", text)
+        first_word = first_match.group(1).lower() if first_match else ""
+        opening_counts[first_word] += 1 if first_word else 0
+        issues: list[dict[str, str]] = []
+        bullet_id = f"bullet-{index:02d}"
+
+        if first_word in WEAK_OPENINGS:
+            issues.append(make_issue(
+                f"{bullet_id}-weak-opening",
+                "action_verbs",
+                "medium",
+                WEAK_OPENINGS[first_word],
+                text,
+            ))
+        elif first_word and first_word not in STRONG_ACTION_VERBS:
+            issues.append(make_issue(
+                f"{bullet_id}-unclear-opening",
+                "action_verbs",
+                "low",
+                "Consider starting this bullet with a precise action verb when it accurately describes your contribution.",
+                text,
+            ))
+
+        if re.search(r"\b(?:i|me|my|we|our)\b", text, re.IGNORECASE):
+            issues.append(make_issue(
+                f"{bullet_id}-first-person",
+                "readability",
+                "low",
+                "Resume bullets are usually clearer without first-person pronouns.",
+                text,
+            ))
+        if len(words) > 42:
+            issues.append(make_issue(
+                f"{bullet_id}-long",
+                "readability",
+                "medium",
+                "This bullet is long; consider separating the contribution and result into shorter statements.",
+                text,
+            ))
+        if 3 <= len(words) <= 5:
+            issues.append(make_issue(
+                f"{bullet_id}-short",
+                "bullet_detail",
+                "medium",
+                "This short bullet could include the task, technology, or outcome where truthful.",
+                text,
+            ))
+        if re.search(r"\b(?:improved|increased|reduced|saved|faster|optimized|grew)\b", text, re.IGNORECASE) and not re.search(r"\d", text):
+            issues.append(make_issue(
+                f"{bullet_id}-quantification",
+                "quantification",
+                "medium",
+                "Add a measured result if you have one; for example, time saved, records handled, or a validated performance change.",
+                text,
+            ))
+
+        stable = stable_issues(issues)
+        all_issues.extend(stable)
+        results.append({
+            "id": bullet_id,
+            "section_name": bullet["section_name"],
+            "evidence": redact_evidence(text),
+            "issues": stable,
+        })
+
+    normalized_counts = Counter(normalized_text(item["text"]) for item in bullets)
+    for index, bullet in enumerate(bullets, start=1):
+        if normalized_counts[normalized_text(bullet["text"])] > 1:
+            all_issues.append(make_issue(
+                f"bullet-{index:02d}-duplicate",
+                "repetition",
+                "medium",
+                "This bullet duplicates another statement; combine or differentiate the evidence.",
+                bullet["text"],
+            ))
+
+    for opening, count in sorted(opening_counts.items()):
+        if opening and count >= 3:
+            all_issues.append(make_issue(
+                f"repeated-opening-{opening}",
+                "repetition",
+                "low",
+                f"The opening verb '{opening}' appears repeatedly; vary wording when it remains accurate.",
+            ))
+
+    return results, stable_issues(all_issues)
 
 
 def is_probable_heading(line: str) -> bool:
@@ -315,6 +537,60 @@ def detect_repeated_words(
     ]
 
     return repeated_words[:15]
+
+
+def analyze_content_issues(resume_text: str) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """Find bounded generic, readability, and date-format feedback."""
+
+    content_issues: list[dict[str, str]] = []
+    readability_issues: list[dict[str, str]] = []
+    lowercase = resume_text.lower()
+
+    for phrase in sorted(GENERIC_PHRASES):
+        if phrase in lowercase:
+            content_issues.append(make_issue(
+                f"generic-{phrase.replace(' ', '-')}",
+                "generic_wording",
+                "low",
+                f"'{phrase}' is more convincing when supported by a concrete example.",
+            ))
+
+    for line in get_nonempty_lines(resume_text):
+        if len(line.split()) > 55:
+            readability_issues.append(make_issue(
+                "readability-dense-content",
+                "readability",
+                "medium",
+                "A dense sentence or paragraph may be easier to scan when split into shorter resume-focused statements.",
+                line,
+            ))
+            break
+        if re.search(r"[!]{2,}|[?]{2,}", line):
+            readability_issues.append(make_issue(
+                "readability-excessive-punctuation",
+                "readability",
+                "low",
+                "Use restrained punctuation so technical content remains easy to scan.",
+                line,
+            ))
+            break
+
+    date_styles = set()
+    if re.search(r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{4}\b", lowercase):
+        date_styles.add("month-year")
+    if re.search(r"\b\d{1,2}/\d{4}\b", resume_text):
+        date_styles.add("numeric-month-year")
+    if re.search(r"\b\d{4}\s*[-–—]\s*\d{4}\b", resume_text):
+        date_styles.add("year-range")
+    if len(date_styles) > 1:
+        readability_issues.append(make_issue(
+            "readability-date-format",
+            "readability",
+            "low",
+            "Use a consistent date style across education, project, and experience entries.",
+        ))
+
+    return stable_issues(content_issues), stable_issues(readability_issues)
 
 
 def evaluate_summary(
@@ -716,6 +992,15 @@ def analyze_resume_quality(
         parsed_data
     )
 
+    section_feedback = analyze_section_feedback(parsed_data)
+    bullet_feedback, bullet_issues = analyze_bullets(
+        parsed_data,
+        resume_text,
+    )
+    content_issues, readability_issues = analyze_content_issues(resume_text)
+    contact_feedback = analyze_contact_feedback(parsed_data, resume_text)
+    skills_feedback = analyze_skills_feedback(parsed_data)
+
     missing_skills = skill_comparison.get(
         "missing_skills",
         [],
@@ -748,6 +1033,38 @@ def analyze_resume_quality(
         short_lines=short_lines,
     )
 
+    advanced_issues = stable_issues(
+        bullet_issues
+        + content_issues
+        + readability_issues
+        + contact_feedback["issues"]
+        + skills_feedback["issues"]
+        + [
+            issue
+            for section in section_feedback
+            for issue in section["issues"]
+        ]
+    )
+    priority_actions = [
+        {
+            "id": issue["id"],
+            "priority": issue["priority"],
+            "category": issue["category"],
+            "action": issue["message"],
+        }
+        for issue in advanced_issues[:3]
+    ]
+    strengths = [
+        strength
+        for section in section_feedback
+        for strength in section["strengths"]
+    ][:5] + contact_feedback["strengths"][:2]
+    overall_feedback_summary = (
+        "The feedback highlights the most important structure, writing, and evidence opportunities found in this resume."
+        if advanced_issues
+        else "No major deterministic writing or structure issues were detected in the reviewed content."
+    )
+
     return {
         "quality_score": quality_score,
         "quality_rating": quality_rating,
@@ -762,8 +1079,161 @@ def analyze_resume_quality(
         "bullet_point_templates": generate_bullet_template(
             missing_skills
         ),
+        "overall_feedback_summary": overall_feedback_summary,
+        "section_feedback": section_feedback,
+        "bullet_feedback": bullet_feedback,
+        "content_issues": content_issues,
+        "readability_issues": readability_issues,
+        "action_verb_feedback": {
+            "strong_action_percentage": action_result[
+                "action_verb_percentage"
+            ],
+            "issues": [
+                issue
+                for issue in bullet_issues
+                if issue["category"] == "action_verbs"
+            ],
+        },
+        "quantification_opportunities": [
+            issue
+            for issue in bullet_issues
+            if issue["category"] == "quantification"
+        ],
+        "repetition_issues": [
+            issue
+            for issue in bullet_issues
+            if issue["category"] == "repetition"
+        ],
+        "contact_information_feedback": contact_feedback,
+        "skills_feedback": skills_feedback,
+        "priority_actions": priority_actions,
+        "strengths": strengths,
+        "limitations": [
+            "Feedback is rule-based and cannot verify whether a listed skill or claim is accurate.",
+            "Projects, coursework, internships, and research can demonstrate experience for students and entry-level candidates.",
+        ],
         "disclaimer": (
-            "Generated templates contain placeholders. Replace them "
-            "with truthful information and do not invent achievements."
+            "Feedback is deterministic and advisory. Verify every suggestion, use only truthful details, and do not invent achievements or metrics."
         ),
+    }
+
+
+def analyze_section_feedback(
+    parsed_data: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Return concise section feedback while treating projects as experience evidence."""
+
+    sections = parsed_data.get("sections", {})
+    has_projects = bool(sections.get("projects", "").strip())
+    feedback: list[dict[str, Any]] = []
+
+    for section_name in (
+        "summary", "skills", "experience", "projects", "education",
+        "certifications", "achievements",
+    ):
+        content = sections.get(section_name, "").strip()
+        issues: list[dict[str, str]] = []
+        strengths: list[str] = []
+        suggestions: list[str] = []
+        detected = bool(content)
+
+        if detected:
+            strengths.append(f"{SECTION_LABELS[section_name]} is clearly labeled.")
+            if section_name in {"experience", "projects"} and len(content.split()) < 20:
+                issues.append(make_issue(
+                    f"section-{section_name}-brief",
+                    "sections",
+                    "medium",
+                    f"Add more concrete detail to the {SECTION_LABELS[section_name].lower()} section where available.",
+                    content,
+                ))
+        elif section_name == "experience" and has_projects:
+            suggestions.append("Projects can demonstrate relevant experience for entry-level resumes; add internships or employment only when applicable.")
+        elif section_name in {"certifications", "achievements"}:
+            suggestions.append(f"Include {SECTION_LABELS[section_name].lower()} only when you have relevant evidence.")
+        elif section_name == "summary":
+            suggestions.append("A short summary can help when it clarifies your target area and demonstrated skills.")
+        else:
+            priority = "high" if section_name in {"skills", "education"} else "medium"
+            issues.append(make_issue(
+                f"section-{section_name}-missing",
+                "sections",
+                priority,
+                f"Consider adding a clearly labeled {SECTION_LABELS[section_name].lower()} section if it reflects your background.",
+            ))
+
+        feedback.append({
+            "section_name": section_name,
+            "detected": detected,
+            "strengths": strengths,
+            "issues": stable_issues(issues),
+            "suggestions": suggestions,
+            "priority": (
+                stable_issues(issues)[0]["priority"] if issues else "low"
+            ),
+            "evidence": redact_evidence(content) if content else None,
+        })
+
+    return feedback
+
+
+def analyze_contact_feedback(
+    parsed_data: dict[str, Any],
+    resume_text: str,
+) -> dict[str, Any]:
+    """Provide privacy-conscious contact feedback without returning values."""
+
+    issues: list[dict[str, str]] = []
+    strengths: list[str] = []
+    links = parsed_data.get("links", {})
+
+    if parsed_data.get("email"):
+        strengths.append("An email address was detected.")
+    else:
+        issues.append(make_issue("contact-email-missing", "contact", "high", "Add a professional email address."))
+    if parsed_data.get("phone"):
+        strengths.append("A phone number was detected.")
+    else:
+        issues.append(make_issue("contact-phone-missing", "contact", "medium", "Consider adding a phone number if appropriate for your application."))
+    if not links.get("linkedin"):
+        issues.append(make_issue("contact-linkedin-optional", "contact", "low", "Consider adding a LinkedIn profile if it strengthens your professional context."))
+    if not (links.get("github") or links.get("portfolio")):
+        issues.append(make_issue("contact-work-sample-optional", "contact", "low", "For technical roles, consider linking relevant work samples when available."))
+    if re.search(r"\b\d{1,5}\s+[^\n]{3,40}\s(?:street|st|road|rd|avenue|ave|lane|ln)\b", resume_text, re.IGNORECASE):
+        issues.append(make_issue("contact-precise-address", "privacy", "medium", "Avoid including a precise residential street address unless it is required."))
+
+    return {"strengths": strengths, "issues": stable_issues(issues)}
+
+
+def analyze_skills_feedback(parsed_data: dict[str, Any]) -> dict[str, Any]:
+    """Identify duplicate or unsupported-by-section skill presentation safely."""
+
+    skills = parsed_data.get("skills", {}).get("all", [])
+    sections = parsed_data.get("sections", {})
+    demonstrated_text = " ".join(
+        [sections.get("experience", ""), sections.get("projects", "")]
+    ).lower()
+    normalized = [normalized_text(skill) for skill in skills]
+    duplicates = sorted({skill for skill, count in Counter(normalized).items() if count > 1})
+    issues: list[dict[str, str]] = []
+
+    if duplicates:
+        issues.append(make_issue("skills-duplicates", "skills", "low", "Remove duplicate skills so the skills section is easier to scan."))
+
+    not_demonstrated = [
+        skill for skill in skills
+        if normalized_text(skill) and normalized_text(skill) not in demonstrated_text
+    ][:5]
+    if not_demonstrated:
+        issues.append(make_issue(
+            "skills-not-demonstrated",
+            "skills",
+            "low",
+            "Consider demonstrating listed skills in a project or experience bullet where truthful.",
+        ))
+
+    return {
+        "detected_skill_count": len(skills),
+        "not_demonstrated_skills": not_demonstrated,
+        "issues": stable_issues(issues),
     }
