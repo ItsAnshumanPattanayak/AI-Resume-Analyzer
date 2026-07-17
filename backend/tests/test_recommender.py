@@ -1,4 +1,9 @@
+import pytest
+
 from app.recommender import recommend_job_roles
+
+
+pytestmark = pytest.mark.semantic
 
 
 resume_text = """
@@ -24,23 +29,26 @@ retrieval augmented generation and large language models.
 """
 
 
-result = recommend_job_roles(
-    resume_text=resume_text,
-    top_n=5,
-)
+def test_recommend_job_roles() -> None:
+    result = recommend_job_roles(
+        resume_text=resume_text,
+        top_n=5,
+    )
 
+    assert "python" in result["candidate_skills"]
+    assert result["best_role"]
+    assert len(result["recommended_roles"]) == 5
 
-print("\nCandidate skills:")
-print(result["candidate_skills"])
+    match_percentages = [
+        recommendation[
+            "overall_match_percentage"
+        ]
+        for recommendation in result[
+            "recommended_roles"
+        ]
+    ]
 
-print("\nBest role:")
-print(result["best_role"])
-
-print("\nRecommended roles:")
-
-for recommendation in result["recommended_roles"]:
-    print(
-        recommendation["role"],
-        recommendation["overall_match_percentage"],
-        recommendation["recommendation_level"],
+    assert match_percentages == sorted(
+        match_percentages,
+        reverse=True,
     )

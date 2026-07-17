@@ -652,6 +652,32 @@ Create a production frontend build:
 npm run build
 ```
 
+### Continuous Integration
+
+GitHub Actions runs continuous integration for pull requests targeting
+`main`, pushes to `main`, and manual workflow dispatches. Required CI checks:
+
+* run the backend test suite without model-dependent semantic tests and
+  produce a terminal coverage report;
+* run frontend linting, component tests, and the production build;
+* validate the Docker Compose configuration;
+* build the backend and frontend Docker images without pushing them.
+
+Semantic-model tests remain available as an optional manual workflow run.
+They are excluded from normal CI so pull requests do not download the
+Sentence Transformer model.
+
+CI validates the repository but does not deploy the application. Docker image
+publication is a separate, manually triggered workflow.
+
+Equivalent local commands are listed above. Docker validation can be run from
+the repository root with:
+
+```bash
+docker compose --env-file .env.docker -f compose.yaml config
+docker compose --env-file .env.docker -f compose.yaml build
+```
+
 ---
 
 ## API Endpoints
@@ -790,7 +816,7 @@ The repository contains development-oriented defaults and is not presented as a 
 * Resume improvement feedback is rule-based and does not rewrite the resume automatically.
 * The project does not fetch current job openings or real-time labour-market information.
 * No hosted frontend or backend deployment is included in the repository.
-* No CI/CD workflow is currently included.
+* CI validates tests and Docker builds but does not deploy the application.
 * Frontend automated test coverage is smaller than the backend test suite.
 
 ---
@@ -817,10 +843,7 @@ The following are possible future improvements and are **not currently claimed a
 
 * OCR for scanned resumes;
 * broader frontend test coverage;
-* Docker and Docker Compose support;
-* continuous integration;
 * deployment documentation;
-* PostgreSQL production configuration;
 * password reset and email verification;
 * refresh-token support;
 * configurable skill and role administration;
