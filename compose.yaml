@@ -35,6 +35,14 @@ services:
 
     restart: unless-stopped
 
+    command:
+      - sh
+      - -c
+      - >-
+        python -m alembic upgrade head &&
+        exec python -m uvicorn app.main:app
+        --host 0.0.0.0 --port 8000
+
     environment:
       APP_NAME: AI Resume Analyzer API
       APP_VERSION: "1.5.0"

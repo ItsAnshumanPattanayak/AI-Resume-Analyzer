@@ -676,6 +676,21 @@ Sentence Transformer model.
 CI validates the repository but does not deploy the application. Docker image
 publication is a separate, manually triggered workflow.
 
+### Railway Deployment Preparation
+
+The repository includes a manual Railway preparation runbook for a frontend
+service, backend service, and Railway-managed PostgreSQL database:
+
+```text
+docs/RAILWAY_DEPLOYMENT.md
+```
+
+The guide documents Dockerfile-based monorepo services, backend pre-deploy
+Alembic migrations, Railway health checks, production variables, build-time
+`VITE_API_BASE_URL`, CORS setup, resource risks, rollback considerations, and
+an opt-in smoke-test procedure. These files prepare deployment only; they do
+not create Railway resources or indicate that deployment has occurred.
+
 Equivalent local commands are listed above. Docker validation can be run from
 the repository root with:
 
@@ -855,7 +870,7 @@ configuration.
 * The initial semantic-model download can require an internet connection.
 * Resume improvement feedback is rule-based and does not rewrite the resume automatically.
 * The project does not fetch current job openings or real-time labour-market information.
-* No hosted frontend or backend deployment is included in the repository.
+* Railway deployment preparation is documented, but no hosted frontend or backend deployment is included in the repository.
 * CI validates tests and Docker builds but does not deploy the application.
 * Frontend automated test coverage is smaller than the backend test suite.
 
@@ -883,7 +898,7 @@ The following are possible future improvements and are **not currently claimed a
 
 * OCR for scanned resumes;
 * broader frontend test coverage;
-* deployment documentation;
+* completed and verified hosted deployment;
 * password reset and email verification;
 * refresh-token support;
 * configurable skill and role administration;
