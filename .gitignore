@@ -57,3 +57,4 @@ backend/*.db
 backend/*.db-journal
 backend/*.db-shm
 backend/*.db-wal
+.env.docker

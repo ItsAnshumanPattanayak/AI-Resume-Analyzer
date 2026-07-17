@@ -1,0 +1,113 @@
+name: ai-resume-analyzer
+
+services:
+  database:
+    image: postgres:17-alpine
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    ports:
+      - "5432:5432"
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    restart: unless-stopped
+
+    environment:
+      APP_NAME: AI Resume Analyzer API
+      APP_VERSION: "1.5.0"
+      APP_ENVIRONMENT: production
+      DEBUG: "false"
+
+      DATABASE_URL: >-
+        postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB}
+
+      DATABASE_POOL_SIZE: "5"
+      DATABASE_MAX_OVERFLOW: "10"
+      DATABASE_POOL_TIMEOUT_SECONDS: "30"
+      DATABASE_POOL_RECYCLE_SECONDS: "1800"
+
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ALGORITHM: ${JWT_ALGORITHM}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
+
+      CORS_ORIGINS: >-
+        ["http://localhost:3000","http://127.0.0.1:3000"]
+
+      ALLOW_LOCALHOST_ORIGIN_REGEX: "true"
+      MAXIMUM_FILE_SIZE_MB: "5"
+
+      SEMANTIC_MODEL_NAME: >-
+        sentence-transformers/all-MiniLM-L6-v2
+
+      SEMANTIC_MODEL_LOCAL_ONLY: "false"
+      LOG_LEVEL: INFO
+
+      HF_HOME: /app/model_cache
+
+    volumes:
+      - huggingface_cache:/app/model_cache
+
+    ports:
+      - "8000:8000"
+
+    depends_on:
+      database:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+
+    restart: unless-stopped
+
+    ports:
+      - "3000:80"
+
+    depends_on:
+      backend:
+        condition: service_healthy
+
+
+volumes:
+  postgres_data:
+  huggingface_cache:
