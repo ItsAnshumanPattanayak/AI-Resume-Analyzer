@@ -226,7 +226,21 @@ The advisor module evaluates signals such as:
 * detected skill gaps when a job description is supplied;
 * prioritized improvement suggestions.
 
-This feature generates recommendations but does not rewrite or export a new resume document.
+The feedback is deterministic and rule-based. It can identify section coverage,
+bullet clarity, action-verb usage, generic wording, repetition, readability,
+possible quantification opportunities, and conservative contact-information
+presentation issues. Short evidence excerpts are redacted for emails, phone
+numbers, links, and address-like content before they are returned.
+
+Projects, coursework, internships, research, hackathons, and open-source work
+can demonstrate experience for students and entry-level candidates; a missing
+employment section is not treated as a requirement when project evidence is
+available. The feedback differs from ATS compatibility scoring: it evaluates
+writing and presentation signals rather than job-match likelihood.
+
+This feature generates recommendations but does not rewrite or export a new
+resume document, verify claims, invent achievements, metrics, skills, or work
+history. Users must verify every suggestion before editing their resume.
 
 ### 10. Private Analysis History
 

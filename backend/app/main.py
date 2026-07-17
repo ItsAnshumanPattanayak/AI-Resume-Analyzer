@@ -55,6 +55,7 @@ from app.schemas import (
     AnalysisHistoryItem,
     DeleteHistoryResponse,
     RoleRecommendationResponse,
+    ResumeImprovementResponse,
     UserLoginRequest,
     UserRegisterRequest,
     UserResponse,
@@ -822,7 +823,10 @@ async def recommend_roles(
         await file.close()
 
 
-@app.post("/api/resume/improve")
+@app.post(
+    "/api/resume/improve",
+    response_model=ResumeImprovementResponse,
+)
 async def improve_resume(
     request: Request,
     current_user: AuthenticatedUser,
