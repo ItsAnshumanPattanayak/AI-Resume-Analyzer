@@ -1,81 +1,336 @@
+import pytest
+from pydantic import ValidationError
+
 from app.config import Settings
 
 
-def test_default_settings() -> None:
-    settings = Settings(
-        jwt_secret_key=(
-            "test-secret-key-that-is-"
-            "longer-than-thirty-two-characters"
+TEST_SECRET_KEY = (
+    "test-secret-key-that-is-"
+    "longer-than-thirty-two-characters"
+)
+
+
+def create_test_settings(
+    **overrides,
+) -> Settings:
+    """
+    Create isolated settings without reading .env.
+    """
+
+    values = {
+        "jwt_secret_key": (
+            TEST_SECRET_KEY
         ),
+        "app_name": (
+            "AI Resume Analyzer API"
+        ),
+        "app_version": "1.5.0",
+        "app_environment": (
+            "development"
+        ),
+        "debug": False,
+        "database_url": (
+            "sqlite:///test.db"
+        ),
+        "maximum_file_size_mb": 5,
+        "semantic_model_local_only": True,
+        "cors_origins": [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ],
+    }
+
+    values.update(overrides)
+
+    return Settings(
+        **values,
         _env_file=None,
     )
 
-    assert settings.app_name == (
+
+def test_default_settings() -> None:
+    test_settings = (
+        create_test_settings()
+    )
+
+    assert test_settings.app_name == (
         "AI Resume Analyzer API"
     )
 
     assert (
-        settings.app_environment
+        test_settings.app_environment
         == "development"
     )
 
     assert (
-        settings.maximum_file_size_bytes
+        test_settings
+        .maximum_file_size_bytes
         == 5 * 1024 * 1024
     )
 
     assert (
-        settings
+        test_settings
         .semantic_model_local_only
         is True
     )
 
-
-def test_comma_separated_cors_origins() -> None:
-    settings = Settings(
-        jwt_secret_key=(
-            "test-secret-key-that-is-"
-            "longer-than-thirty-two-characters"
-        ),
-        cors_origins=(
-            "http://localhost:5173,"
-            "http://127.0.0.1:5173"
-        ),
-        _env_file=None,
+    assert (
+        test_settings
+        .database_pool_size
+        == 5
     )
 
-    assert settings.cors_origins == [
+    assert (
+        test_settings
+        .database_max_overflow
+        == 10
+    )
+
+
+def test_comma_separated_cors_origins() -> None:
+    test_settings = (
+        create_test_settings(
+            cors_origins=(
+                "http://localhost:5173,"
+                "http://127.0.0.1:5173"
+            )
+        )
+    )
+
+    assert test_settings.cors_origins == [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
 
 
+def test_json_cors_origins() -> None:
+    test_settings = (
+        create_test_settings(
+            cors_origins=(
+                '["http://localhost:5173",'
+                '"https://example.com"]'
+            )
+        )
+    )
+
+    assert test_settings.cors_origins == [
+        "http://localhost:5173",
+        "https://example.com",
+    ]
+
+
+def test_cors_origins_remove_duplicates() -> None:
+    test_settings = (
+        create_test_settings(
+            cors_origins=[
+                "http://localhost:5173",
+                "http://localhost:5173/",
+                "https://example.com",
+            ]
+        )
+    )
+
+    assert test_settings.cors_origins == [
+        "http://localhost:5173",
+        "https://example.com",
+    ]
+
+
+def test_invalid_cors_origin_is_rejected() -> None:
+    with pytest.raises(
+        ValidationError
+    ):
+        create_test_settings(
+            cors_origins=[
+                "localhost:5173",
+            ]
+        )
+
+
 def test_maximum_file_size_conversion() -> None:
-    settings = Settings(
-        jwt_secret_key=(
-            "test-secret-key-that-is-"
-            "longer-than-thirty-two-characters"
-        ),
-        maximum_file_size_mb=10,
-        _env_file=None,
+    test_settings = (
+        create_test_settings(
+            maximum_file_size_mb=10
+        )
     )
 
     assert (
-        settings.maximum_file_size_bytes
+        test_settings
+        .maximum_file_size_bytes
         == 10 * 1024 * 1024
     )
 
 
 def test_environment_helpers() -> None:
-    settings = Settings(
-        jwt_secret_key=(
-            "test-secret-key-that-is-"
-            "longer-than-thirty-two-characters"
-        ),
-        app_environment="production",
-        _env_file=None,
+    test_settings = (
+        create_test_settings(
+            app_environment="production"
+        )
     )
 
-    assert settings.is_production is True
-    assert settings.is_development is False
-    assert settings.is_testing is False
+    assert (
+        test_settings.is_production
+        is True
+    )
+
+    assert (
+        test_settings.is_development
+        is False
+    )
+
+    assert (
+        test_settings.is_testing
+        is False
+    )
+
+
+def test_sqlite_database_url_is_unchanged() -> None:
+    test_settings = (
+        create_test_settings(
+            database_url=(
+                "sqlite:///test.db"
+            )
+        )
+    )
+
+    assert (
+        test_settings
+        .sqlalchemy_database_url
+        == "sqlite:///test.db"
+    )
+
+    assert (
+        test_settings.is_sqlite_database
+        is True
+    )
+
+    assert (
+        test_settings
+        .is_postgresql_database
+        is False
+    )
+
+
+def test_postgres_url_is_normalized() -> None:
+    test_settings = (
+        create_test_settings(
+            database_url=(
+                "postgres://"
+                "user:password"
+                "@localhost:5432/database"
+            )
+        )
+    )
+
+    assert (
+        test_settings
+        .sqlalchemy_database_url
+        == (
+            "postgresql+psycopg://"
+            "user:password"
+            "@localhost:5432/database"
+        )
+    )
+
+
+def test_postgresql_url_is_normalized() -> None:
+    test_settings = (
+        create_test_settings(
+            database_url=(
+                "postgresql://"
+                "user:password"
+                "@localhost:5432/database"
+            )
+        )
+    )
+
+    assert (
+        test_settings
+        .sqlalchemy_database_url
+        == (
+            "postgresql+psycopg://"
+            "user:password"
+            "@localhost:5432/database"
+        )
+    )
+
+    assert (
+        test_settings
+        .is_postgresql_database
+        is True
+    )
+
+
+def test_psycopg_url_is_not_modified() -> None:
+    database_url = (
+        "postgresql+psycopg://"
+        "user:password"
+        "@localhost:5432/database"
+    )
+
+    test_settings = (
+        create_test_settings(
+            database_url=database_url
+        )
+    )
+
+    assert (
+        test_settings
+        .sqlalchemy_database_url
+        == database_url
+    )
+
+
+def test_empty_database_url_is_rejected() -> None:
+    with pytest.raises(
+        ValidationError
+    ):
+        create_test_settings(
+            database_url=" "
+        )
+
+
+def test_unsupported_database_url_is_rejected() -> None:
+    with pytest.raises(
+        ValidationError
+    ):
+        create_test_settings(
+            database_url=(
+                "mysql://user:password"
+                "@localhost/database"
+            )
+        )
+
+
+def test_database_pool_settings() -> None:
+    test_settings = (
+        create_test_settings(
+            database_pool_size=8,
+            database_max_overflow=16,
+            database_pool_timeout_seconds=45,
+            database_pool_recycle_seconds=3600,
+        )
+    )
+
+    assert (
+        test_settings.database_pool_size
+        == 8
+    )
+
+    assert (
+        test_settings
+        .database_max_overflow
+        == 16
+    )
+
+    assert (
+        test_settings
+        .database_pool_timeout_seconds
+        == 45
+    )
+
+    assert (
+        test_settings
+        .database_pool_recycle_seconds
+        == 3600
+    )

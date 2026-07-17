@@ -22,10 +22,7 @@ from app.auth import (
     get_current_user,
 )
 from app.config import settings
-from app.database import (
-    create_database_tables,
-    get_database_session,
-)
+from app.database import get_database_session
 from app.error_handlers import (
     register_exception_handlers,
 )
@@ -79,13 +76,10 @@ async def lifespan(
 ):
     """
     Initialize application resources.
+
+    Database schema creation and schema changes
+    are managed through Alembic migrations.
     """
-
-    create_database_tables()
-
-    logger.info(
-        "Database tables initialized successfully."
-    )
 
     logger.info(
         (

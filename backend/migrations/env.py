@@ -1,7 +1,10 @@
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import (
+    engine_from_config,
+    pool,
+)
 
 from app import models  # noqa: F401
 from app.config import settings
@@ -17,9 +20,14 @@ if config.config_file_name is not None:
     )
 
 
+database_url = (
+    settings.sqlalchemy_database_url
+)
+
+
 config.set_main_option(
     "sqlalchemy.url",
-    settings.database_url.replace(
+    database_url.replace(
         "%",
         "%%",
     ),
@@ -35,14 +43,14 @@ def run_migrations_offline() -> None:
     database connection.
     """
 
-    database_url = (
+    configured_database_url = (
         config.get_main_option(
             "sqlalchemy.url"
         )
     )
 
     context.configure(
-        url=database_url,
+        url=configured_database_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={
@@ -51,9 +59,8 @@ def run_migrations_offline() -> None:
         compare_type=True,
         compare_server_default=True,
         render_as_batch=(
-            database_url.startswith(
-                "sqlite"
-            )
+            configured_database_url
+            .startswith("sqlite")
         ),
     )
 
@@ -67,11 +74,15 @@ def run_migrations_online() -> None:
     connection.
     """
 
-    connectable = engine_from_config(
+    configuration = (
         config.get_section(
             config.config_ini_section,
             {},
-        ),
+        )
+    )
+
+    connectable = engine_from_config(
+        configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
@@ -79,7 +90,9 @@ def run_migrations_online() -> None:
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
-            target_metadata=target_metadata,
+            target_metadata=(
+                target_metadata
+            ),
             compare_type=True,
             compare_server_default=True,
             render_as_batch=(
