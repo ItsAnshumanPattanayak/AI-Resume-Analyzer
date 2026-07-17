@@ -1,1046 +1,278 @@
-<div align="center">
-
 # AI Resume Analyzer
 
-### Explainable resume analysis using NLP, semantic similarity, and rule-based ATS scoring
+An intelligent full-stack platform for resume parsing, ATS-style analysis,
+job-description matching, role recommendations, and actionable career feedback.
 
-[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python\&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi\&logoColor=white)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-Frontend-61DAFB?logo=react\&logoColor=black)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-Build%20Tool-646CFF?logo=vite\&logoColor=white)](https://vite.dev/)
-[![SQLite](https://img.shields.io/badge/SQLite-Database-003B57?logo=sqlite\&logoColor=white)](https://www.sqlite.org/)
+[![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-Frontend-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supported-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![GitHub Actions](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=github-actions&logoColor=white)](.github/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/ItsAnshumanPattanayak/AI-Resume-Analyzer)](LICENSE)
 
-A full-stack application that analyzes PDF and DOCX resumes, compares them with job descriptions, calculates explainable compatibility scores, recommends suitable technical roles, identifies resume-writing weaknesses, and stores each user's reports privately.
+AI Resume Analyzer helps candidates understand how a PDF or DOCX resume aligns
+with a job description or technical role profiles. It combines deterministic
+extraction and ATS-style signals with TF-IDF and Sentence Transformer
+similarity, then presents explainable scores, missing skills, role
+recommendations, and rule-based resume feedback. Results are guidance—not
+official employer ATS decisions or hiring predictions.
 
-</div>
+## Contents
 
----
-
-## Overview
-
-AI Resume Analyzer helps candidates inspect how well their resume aligns with a target job description.
-
-The application combines:
-
-* structured resume information extraction;
-* rule-based skill detection;
-* TF-IDF content similarity;
-* Sentence Transformer semantic similarity;
-* section-level semantic matching;
-* transparent ATS-style scoring;
-* predefined technical-role recommendations;
-* rule-based resume-quality feedback;
-* JWT authentication and private analysis history.
-
-The system is designed to make its results understandable. Scores are broken into individual components instead of being presented as an unexplained prediction.
-
-> This project provides resume-analysis guidance. Its score is an internal compatibility estimate and is not the score produced by any specific employer or commercial Applicant Tracking System.
-
----
-
-## Current Implementation Status
-
-The following features are implemented in the repository:
-
-| Feature                                  | Status                |
-| ---------------------------------------- | --------------------- |
-| PDF resume text extraction               | Implemented           |
-| DOCX resume text extraction              | Implemented           |
-| Candidate-information extraction         | Implemented           |
-| Resume-to-job comparison                 | Implemented           |
-| Skill-gap analysis                       | Implemented           |
-| TF-IDF similarity                        | Implemented           |
-| Sentence Transformer semantic similarity | Implemented           |
-| Section/chunk-level matching             | Implemented           |
-| Explainable ATS-style scoring            | Implemented           |
-| Technical role recommendations           | Implemented           |
-| Resume-quality suggestions               | Implemented           |
-| User registration and login              | Implemented           |
-| JWT-protected API access                 | Implemented           |
-| Per-user analysis history                | Implemented           |
-| History report deletion                  | Implemented           |
-| React dashboard                          | Implemented           |
-| Backend automated tests                  | Implemented           |
-| Frontend component tests                 | Partially implemented |
-| Cloud deployment                         | Not included          |
-| OCR for scanned/image-only resumes       | Not implemented       |
-| Automatic AI rewriting of the resume     | Not implemented       |
-| Recruiter or organization dashboard      | Not implemented       |
-
----
+- [Features](#features)
+- [Application modes](#application-modes)
+- [Screenshots](#screenshots)
+- [Architecture](#architecture)
+- [Technology stack](#technology-stack)
+- [Local development](#local-development)
+- [Docker](#docker)
+- [Testing](#testing)
+- [Security and privacy](#security-and-privacy)
+- [Limitations and roadmap](#limitations-and-roadmap)
+- [Developer](#developer)
 
 ## Features
 
-### 1. Secure User Accounts
+### Resume understanding
 
-Users can:
+- PDF and DOCX parsing, including DOCX tables.
+- File signature, container, size, and empty-upload validation.
+- Structured extraction of contact fields, links, sections, and skills.
 
-* register using a name, email address, and password;
-* sign in and receive a JWT access token;
-* restore an authenticated frontend session;
-* access protected resume-analysis endpoints;
-* view only their own analysis history;
-* delete their own saved reports.
+### Analysis and recommendations
 
-Passwords are hashed before storage, and protected API requests require bearer-token authentication.
+- Resume-to-job-description skill matching and gap identification.
+- Explainable ATS-style scoring with bounded component results.
+- TF-IDF, combined similarity, and Sentence Transformer semantic analysis.
+- Technical role recommendations from repository-maintained role profiles.
+- Matched/missing skills, score components, strengths, and improvement areas.
+- Deterministic feedback for sections, bullets, action verbs, quantification,
+  repetition, readability, contact presentation, and bounded evidence.
 
-### 2. PDF and DOCX Parsing
+### Accounts and operations
 
-The backend accepts:
+- Argon2 password hashing and JWT authentication.
+- Authenticated, user-scoped analysis history with open and delete actions.
+- SQLite for local development/CI and PostgreSQL for Compose/deployment prep.
+- Docker Compose for frontend, backend, and PostgreSQL.
+- GitHub Actions CI for backend, frontend, and Docker validation.
+- Rate limiting, environment-based secrets, database health checks, upload
+  hardening, and privacy-conscious logging.
 
-* `.pdf`
-* `.docx`
+## Application modes
 
-For PDF documents, text is extracted page by page.
+- **Analyze** — upload a resume and job description for skills, similarity,
+  ATS-style, role, and improvement results.
+- **Parse** — extract text and structured candidate information.
+- **Roles** — rank predefined technical roles using exact skills and semantic
+  similarity.
+- **Improve** — review deterministic writing, structure, and feedback signals.
 
-For DOCX documents, the parser reads:
+## Screenshots
 
-* normal paragraphs;
-* text inside tables.
+No application screenshots are committed yet. Follow
+[docs/SCREENSHOTS.md](docs/SCREENSHOTS.md), use fictional candidate data, and
+add approved PNGs under `docs/images/application/`. This README intentionally
+contains no broken or fabricated image references.
 
-The parser also cleans repeated spaces, tabs, line endings, and excessive blank lines while preserving the resume's line structure.
+## Architecture
 
-Scanned PDFs that contain only images are not supported because OCR is not currently implemented.
+![System architecture](docs/images/diagrams/system-architecture.svg)
 
-### 3. Structured Resume Extraction
+The React/Vite frontend sends authenticated requests to FastAPI. The backend
+validates files, extracts structured information, compares skills and content,
+optionally runs the Sentence Transformer, calculates ATS signals, ranks roles,
+generates advisor feedback, and persists reports through SQLAlchemy. SQLite and
+PostgreSQL are supported; Alembic manages migrations.
 
-The analyzer extracts structured information from the resume text, including available fields such as:
+See the [architecture guide](docs/ARCHITECTURE.md),
+[analysis workflow](docs/images/diagrams/analysis-workflow.svg), and
+[authentication flow](docs/images/diagrams/authentication-flow.svg).
 
-* email addresses;
-* phone numbers;
-* professional links;
-* detected skills;
-* resume sections;
-* candidate-related information recognized by the extraction rules.
+## Technology stack
 
-Extraction is based on deterministic patterns and the project's internal skill taxonomy.
+| Area | Verified technologies |
+| --- | --- |
+| Frontend | React, Vite, Axios, CSS, Nginx |
+| Backend | Python, FastAPI, Uvicorn, Pydantic |
+| AI/NLP | Sentence Transformers, PyTorch, NumPy, scikit-learn, PyMuPDF, python-docx |
+| Database | SQLAlchemy, Alembic, SQLite, PostgreSQL, Psycopg 3 |
+| Authentication | PyJWT, Argon2 via `pwdlib` |
+| Testing | pytest, pytest-cov, Vitest, React Testing Library |
+| DevOps | Docker Compose, GitHub Actions, Buildx |
+| Deployment preparation | Railway configuration/runbook; no deployment claimed |
 
-### 4. Complete Resume-to-Job Analysis
-
-The main analysis mode compares an uploaded resume with a supplied job description.
-
-It combines:
-
-* detected resume skills;
-* detected job-description skills;
-* matched and missing skills;
-* TF-IDF similarity;
-* semantic similarity;
-* chunk-level matching;
-* resume structure and content signals;
-* ATS-style component scoring.
-
-The job description must contain at least 50 characters.
-
-### 5. Explainable ATS-Style Score
-
-The ATS module uses transparent, rule-based calculations rather than a hidden employer model.
-
-The analysis returns score components and recommendations based on factors such as:
-
-* skill alignment;
-* content similarity;
-* resume completeness;
-* detected sections;
-* contact information;
-* resume formatting and content signals.
-
-This makes it possible to understand why a score was assigned and which areas affected it.
-
-### 6. Semantic Matching
-
-The semantic-analysis module uses a Sentence Transformer model to compare meaning beyond exact keyword overlap.
-
-The default model is:
+## Repository structure
 
 ```text
-sentence-transformers/all-MiniLM-L6-v2
+backend/app/                 FastAPI routes and application services
+backend/data/                Role profiles and skill definitions
+backend/migrations/          Alembic environment and versions
+backend/tests/               pytest suite
+backend/benchmarks/          Synthetic analysis benchmark utility
+frontend/src/components/     Forms, results, history, and branding
+frontend/src/context/        Authentication context
+frontend/src/services/       Axios API client
+docs/                        Architecture, API, demo, screenshots, portfolio
+scripts/                     Optional deployment smoke-test utility
+compose.yaml                 Local Docker Compose infrastructure
+.github/workflows/           CI and manually triggered image workflow
 ```
 
-Long text is divided into chunks, embedded, normalized, and compared using similarity calculations.
+## Local development
 
-The semantic model is loaded lazily and cached after its first successful use.
-
-### 7. Skill-Gap Analysis
-
-The application compares skills detected in the resume with skills found in the job description.
-
-Results can include:
-
-* matched skills;
-* missing skills;
-* resume skills;
-* job-description skills;
-* skill-match information used by the ATS calculation.
-
-The system only suggests adding skills that genuinely reflect the candidate's experience.
-
-### 8. Technical Role Recommendations
-
-The role-recommendation mode compares the resume against predefined technical career profiles.
-
-Recommendations are based on:
-
-* detected candidate skills;
-* skill overlap with each role;
-* semantic similarity between the resume and role profile;
-* combined ranking logic.
-
-The API accepts a configurable `top_n` value and returns the highest-ranked roles.
-
-Each recommended role includes an explainable score breakdown. The final match
-percentage is calculated from the same values used to rank roles:
-
-```text
-final score = (exact skill coverage × 0.70)
-            + (semantic similarity × 0.30)
-```
-
-Exact skill coverage is the percentage of the role profile's required skills
-detected in the resume, including the limited aliases maintained in the
-application. Semantic similarity compares the resume text with the role
-profile text using the configured Sentence Transformer model. The response
-also identifies role-relevant matched skills, missing role skills, concise
-rule-based strengths, improvement areas, and the weighted component values.
-
-Recommendations are advisory only. They are not hiring probabilities,
-recruiter assessments, or guarantees of career suitability. Role profiles and
-their required-skill order are maintained in this repository; they do not
-represent live job-market requirements.
-
-These recommendations come from the role profiles included in the repository. They are not generated from live job-market data.
-
-### 9. Resume Improvement Analysis
-
-The improvement mode reviews resume content using rule-based writing and structure checks.
-
-The advisor module evaluates signals such as:
-
-* weak or passive phrases;
-* action-verb usage;
-* measurable achievements;
-* bullet quality;
-* section completeness;
-* content clarity;
-* detected skill gaps when a job description is supplied;
-* prioritized improvement suggestions.
-
-The feedback is deterministic and rule-based. It can identify section coverage,
-bullet clarity, action-verb usage, generic wording, repetition, readability,
-possible quantification opportunities, and conservative contact-information
-presentation issues. Short evidence excerpts are redacted for emails, phone
-numbers, links, and address-like content before they are returned.
-
-Projects, coursework, internships, research, hackathons, and open-source work
-can demonstrate experience for students and entry-level candidates; a missing
-employment section is not treated as a requirement when project evidence is
-available. The feedback differs from ATS compatibility scoring: it evaluates
-writing and presentation signals rather than job-match likelihood.
-
-This feature generates recommendations but does not rewrite or export a new
-resume document, verify claims, invent achievements, metrics, skills, or work
-history. Users must verify every suggestion before editing their resume.
-
-### 10. Private Analysis History
-
-Successful analysis results are saved to the database and associated with the authenticated user.
-
-Users can:
-
-* list previous analyses;
-* open a complete saved report;
-* identify the analysis type and original filename;
-* delete an individual report.
-
-Supported saved analysis types include:
-
-* resume parsing;
-* complete resume analysis;
-* role recommendations;
-* resume improvement analysis.
-
----
-
-## Analysis Modes
-
-The frontend currently exposes four modes:
-
-### Analyze
-
-Upload a resume and provide a job description to receive the complete comparison report.
-
-### Parse
-
-Extract resume text and structured candidate information without comparing it to a job description.
-
-### Roles
-
-Receive ranked technical-role recommendations based on the resume.
-
-### Improve
-
-Review the resume's structure, language, action verbs, achievements, and other quality signals.
-
----
-
-## Technology Stack
-
-### Backend
-
-* Python
-* FastAPI
-* Uvicorn
-* Pydantic
-* SQLAlchemy
-* SQLite
-* PyJWT
-* Argon2 password hashing
-* PyMuPDF
-* python-docx
-* scikit-learn
-* Sentence Transformers
-* PyTorch
-* NumPy
-* pytest
-* pytest-cov
-
-### Frontend
-
-* React
-* Vite
-* Axios
-* CSS
-* Vitest
-* React Testing Library
-
----
-
-## System Architecture
-
-```text
-┌───────────────────────────────┐
-│        React Frontend         │
-│                               │
-│ Authentication               │
-│ Resume Upload                │
-│ Analysis Modes               │
-│ Results Dashboard            │
-│ Private History              │
-└───────────────┬───────────────┘
-                │ HTTP / JSON
-                │ Bearer JWT
-┌───────────────▼───────────────┐
-│        FastAPI Backend        │
-│                               │
-│ File Validation              │
-│ PDF / DOCX Parsing           │
-│ Information Extraction       │
-│ Skill Comparison             │
-│ TF-IDF Similarity            │
-│ Semantic Similarity          │
-│ ATS Scoring                  │
-│ Role Recommendations         │
-│ Resume Quality Analysis      │
-└───────────────┬───────────────┘
-                │ SQLAlchemy
-┌───────────────▼───────────────┐
-│        SQLite Database        │
-│                               │
-│ Users                        │
-│ Private Analysis History     │
-└───────────────────────────────┘
-```
-
----
-
-## Project Structure
-
-```text
-AI-Resume-Analyzer/
-├── backend/
-│   ├── app/
-│   │   ├── advisor.py          # Resume-quality and improvement analysis
-│   │   ├── ats.py              # Explainable ATS-style scoring
-│   │   ├── auth.py             # Password verification and JWT authentication
-│   │   ├── config.py           # Environment-based configuration
-│   │   ├── database.py         # SQLAlchemy engine and sessions
-│   │   ├── error_handlers.py   # Application exception handlers
-│   │   ├── extractor.py        # Structured resume information extraction
-│   │   ├── history.py          # Analysis-history database operations
-│   │   ├── logging_config.py   # Logging configuration
-│   │   ├── main.py             # FastAPI application and API endpoints
-│   │   ├── models.py           # Database models
-│   │   ├── parser.py           # PDF and DOCX text extraction
-│   │   ├── recommender.py      # Technical-role recommendations
-│   │   ├── schemas.py          # Pydantic request and response schemas
-│   │   ├── semantic.py         # Sentence Transformer matching
-│   │   ├── similarity.py       # TF-IDF and combined similarity
-│   │   ├── skills.py           # Skill extraction and comparison
-│   │   ├── users.py            # User database operations
-│   │   └── utils.py            # Shared utility functions
-│   ├── data/                   # Project datasets and role/skill definitions
-│   ├── tests/                  # Backend pytest suite
-│   ├── .env.example
-│   ├── pytest.ini
-│   └── requirements.txt
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   │   ├── components/         # Forms, scores, skills, history and result panels
-│   │   ├── context/            # Authentication context
-│   │   ├── pages/              # Dashboard
-│   │   ├── services/           # Backend API client
-│   │   ├── test/               # Frontend test configuration
-│   │   ├── App.jsx
-│   │   ├── index.css
-│   │   └── main.jsx
-│   ├── .env.example
-│   ├── package.json
-│   └── vite.config.js
-├── LICENSE
-└── README.md
-```
-
----
-
-## Getting Started
-
-### Prerequisites
-
-Install:
-
-* Git
-* Python
-* Node.js and npm
-
-Python 3.11 or a compatible version is recommended. The project has also been developed and tested in a newer Python environment, but dependency compatibility may vary between Python releases.
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/ItsAnshumanPattanayak/AI-Resume-Analyzer.git
-cd AI-Resume-Analyzer
-```
-
----
-
-## Backend Setup
-
-### 1. Open the Backend Directory
-
-```bash
-cd backend
-```
-
-### 2. Create a Virtual Environment
-
-Windows PowerShell:
+### Windows PowerShell backend
 
 ```powershell
-python -m venv resume
-.\resume\Scripts\Activate.ps1
-```
-
-Windows Command Prompt:
-
-```bat
-python -m venv resume
-resume\Scripts\activate
-```
-
-Linux or macOS:
-
-```bash
-python3 -m venv resume
-source resume/bin/activate
-```
-
-### 3. Install Dependencies
-
-```bash
+cd E:\AI-Resume-Analyzer\backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-### 4. Create the Environment File
-
-Windows:
-
-```powershell
+python -m pip install -r requirements-dev.txt
 Copy-Item .env.example .env
-```
-
-Linux or macOS:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` before starting the backend.
-
-A local configuration can look like this:
-
-```env
-APP_NAME=AI Resume Analyzer API
-APP_VERSION=1.5.0
-APP_ENVIRONMENT=development
-DEBUG=false
-
-DATABASE_URL=sqlite:///./resume_analyzer.db
-
-JWT_SECRET_KEY=replace-this-with-a-new-long-random-secret
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=60
-
-CORS_ORIGINS=["http://localhost:5173","http://127.0.0.1:5173"]
-ALLOW_LOCALHOST_ORIGIN_REGEX=true
-
-RATE_LIMIT_ENABLED=true
-RATE_LIMIT_WINDOW_SECONDS=60
-RATE_LIMIT_REGISTRATION_REQUESTS=5
-RATE_LIMIT_LOGIN_REQUESTS=10
-RATE_LIMIT_RESUME_REQUESTS=10
-
-MAXIMUM_FILE_SIZE_MB=5
-
-SEMANTIC_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
-SEMANTIC_MODEL_LOCAL_ONLY=false
-
-LOG_LEVEL=INFO
-```
-
-Generate a new JWT secret instead of reusing the example value:
-
-```bash
 python -c "import secrets; print(secrets.token_urlsafe(64))"
+python -m alembic upgrade head
+python -m uvicorn app.main:app --reload
 ```
 
-Do not commit your real `.env` file.
+Use `DATABASE_URL=sqlite:///./resume_analyzer.db` for local SQLite, or a
+PostgreSQL URL. Keep `.env` untracked. The API is at
+`http://127.0.0.1:8000`, Swagger at `http://127.0.0.1:8000/docs`, and health at
+`http://127.0.0.1:8000/health`.
 
-### 5. Start the Backend
-
-```bash
-uvicorn app.main:app --reload
-```
-
-The backend will normally be available at:
-
-```text
-http://127.0.0.1:8000
-```
-
-Interactive API documentation:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-Health check:
-
-```text
-http://127.0.0.1:8000/health
-```
-
----
-
-## Semantic Model Setup
-
-Semantic analysis uses the configured Sentence Transformer model.
-
-### Online Loading
-
-For the simplest first run, use:
-
-```env
-SEMANTIC_MODEL_LOCAL_ONLY=false
-```
-
-The model can then be downloaded when semantic analysis is first used.
-
-### Offline Loading
-
-After the model is cached locally, use:
-
-```env
-SEMANTIC_MODEL_LOCAL_ONLY=true
-```
-
-Optional offline environment variables:
-
-Windows PowerShell:
+### Windows PowerShell frontend
 
 ```powershell
-$env:HF_HUB_OFFLINE="1"
-$env:TRANSFORMERS_OFFLINE="1"
-```
-
-Linux or macOS:
-
-```bash
-export HF_HUB_OFFLINE=1
-export TRANSFORMERS_OFFLINE=1
-```
-
-Semantic operations will fail with a clear error if local-only mode is enabled before the model has been downloaded.
-
-### Semantic performance behavior
-
-The Sentence Transformer is loaded lazily on the first semantic operation,
-not during module import or ordinary non-semantic requests. Initialization is
-protected so concurrent first requests create at most one model instance per
-backend process.
-
-Static role-profile embeddings are reused per process. Deterministic text
-embeddings use a bounded process-local cache keyed by the configured model,
-preprocessing version, and a SHA-256 digest of normalized text; raw resume text
-is not retained as a cache key. Configure or disable it with:
-
-```env
-SEMANTIC_RESULT_CACHE_SIZE=32
-```
-
-Set the value to `0` to disable result caching. Caches are not shared between
-workers or replicas and are lost on restart. Each process still holds its own
-model, so additional workers multiply model memory usage. The first semantic
-request remains slower than warm requests and may include model download time.
-
-Optional stage timing logs can be enabled with:
-
-```env
-PERFORMANCE_LOGGING_ENABLED=true
-```
-
-Timing logs contain operation names and elapsed milliseconds only; they do not
-include resume content, job descriptions, filenames, identities, or cache
-keys. Timings vary with hardware, model availability, document size, and cache
-state.
-
-Run the synthetic, non-threshold benchmark from `backend/`:
-
-```bash
-python benchmarks/benchmark_analysis.py --iterations 10
-python benchmarks/benchmark_analysis.py --iterations 5 --semantic
-```
-
-Use `--semantic` only when the configured model is already available or model
-download and resource use have been explicitly approved. Benchmark results are
-local observations, not production latency or scalability guarantees.
-
----
-
-## Frontend Setup
-
-Open a second terminal from the repository root.
-
-### 1. Open the Frontend Directory
-
-```bash
-cd frontend
-```
-
-### 2. Install Dependencies
-
-```bash
-npm install
-```
-
-### 3. Create the Environment File
-
-Windows:
-
-```powershell
+cd E:\AI-Resume-Analyzer\frontend
+npm ci
 Copy-Item .env.example .env
-```
-
-Linux or macOS:
-
-```bash
-cp .env.example .env
-```
-
-Default frontend configuration:
-
-```env
-VITE_API_BASE_URL=http://127.0.0.1:8000
-```
-
-### 4. Start the Development Server
-
-```bash
 npm run dev
 ```
 
-Open the address printed by Vite, normally:
+Vite serves `http://127.0.0.1:5173`. Configure `VITE_API_BASE_URL` in the
+frontend environment file when the API is elsewhere. Never commit real `.env`
+files.
 
-```text
-http://localhost:5173
+## Docker
+
+Copy `.env.docker.example` to `.env.docker`, replace placeholders locally, and
+keep that file untracked:
+
+```powershell
+Copy-Item .env.docker.example .env.docker
+docker compose --env-file .env.docker up --build
+docker compose --env-file .env.docker ps
+docker compose --env-file .env.docker logs -f
+docker compose --env-file .env.docker down
 ```
 
----
+Compose runs PostgreSQL, FastAPI, and Nginx. The frontend is at
+`http://127.0.0.1:3000`; the backend is at `http://127.0.0.1:8000`. This is
+local infrastructure, not a claim of public deployment.
 
-## Running the Tests
+## Environment variables
 
-### Backend Tests
+Use [`backend/.env.example`](backend/.env.example),
+[`backend/.env.production.example`](backend/.env.production.example),
+[`frontend/.env.example`](frontend/.env.example), and
+[`.env.docker.example`](.env.docker.example). Important variables include
+`DATABASE_URL`, `JWT_SECRET_KEY`, `JWT_ALGORITHM`,
+`ACCESS_TOKEN_EXPIRE_MINUTES`, `CORS_ORIGINS`, `MAXIMUM_FILE_SIZE_MB`, rate
+limits, `SEMANTIC_MODEL_NAME`, `SEMANTIC_MODEL_LOCAL_ONLY`,
+`SEMANTIC_RESULT_CACHE_SIZE`, `LOG_LEVEL`, and `VITE_API_BASE_URL`.
 
-From the `backend` directory:
+## Testing
 
-```bash
-python -m pytest
-```
+From `backend`:
 
-Run tests with coverage:
-
-```bash
-python -m pytest --cov=app --cov-report=term-missing
-```
-
-Run tests that do not require the real semantic model:
-
-```bash
+```powershell
 python -m pytest -m "not semantic"
+python -m pytest --cov=app --cov-report=term-missing
+python -m pytest -m semantic  # only when the configured model is available
 ```
 
-Run only semantic tests:
+From `frontend`:
 
-```bash
-python -m pytest -m semantic
-```
-
-Semantic tests may require the configured Sentence Transformer model to be available locally or downloadable from the internet.
-
-### Frontend Tests
-
-From the `frontend` directory:
-
-```bash
-npm run test
-```
-
-Run the frontend suite once:
-
-```bash
-npm run test:run
-```
-
-Run ESLint:
-
-```bash
+```powershell
 npm run lint
-```
-
-Create a production frontend build:
-
-```bash
+npm run test:run
 npm run build
 ```
 
-### Continuous Integration
+Repository/Docker validation:
 
-GitHub Actions runs continuous integration for pull requests targeting
-`main`, pushes to `main`, and manual workflow dispatches. Required CI checks:
-
-* run the backend test suite without model-dependent semantic tests and
-  produce a terminal coverage report;
-* run frontend linting, component tests, and the production build;
-* validate the Docker Compose configuration;
-* build the backend and frontend Docker images without pushing them.
-
-Semantic-model tests remain available as an optional manual workflow run.
-They are excluded from normal CI so pull requests do not download the
-Sentence Transformer model.
-
-CI validates the repository but does not deploy the application. Docker image
-publication is a separate, manually triggered workflow.
-
-### Railway Deployment Preparation
-
-The repository includes a manual Railway preparation runbook for a frontend
-service, backend service, and Railway-managed PostgreSQL database:
-
-```text
-docs/RAILWAY_DEPLOYMENT.md
-```
-
-The guide documents Dockerfile-based monorepo services, backend pre-deploy
-Alembic migrations, Railway health checks, production variables, build-time
-`VITE_API_BASE_URL`, CORS setup, resource risks, rollback considerations, and
-an opt-in smoke-test procedure. These files prepare deployment only; they do
-not create Railway resources or indicate that deployment has occurred.
-
-Equivalent local commands are listed above. Docker validation can be run from
-the repository root with:
-
-```bash
+```powershell
+git diff --check
 docker compose --env-file .env.docker -f compose.yaml config
 docker compose --env-file .env.docker -f compose.yaml build
 ```
 
----
+The synthetic benchmark utility is `backend/benchmarks/benchmark_analysis.py`.
+Its timings are environment-specific observations, not universal claims.
 
-## API Endpoints
+## API overview
 
-All resume and history endpoints require authentication.
+See [docs/API_OVERVIEW.md](docs/API_OVERVIEW.md) for verified routes and
+authentication requirements. Swagger is available at
+`http://127.0.0.1:8000/docs`.
 
-### General
+## Security and privacy
 
-| Method | Endpoint  | Purpose                  |
-| ------ | --------- | ------------------------ |
-| `GET`  | `/`       | API information          |
-| `GET`  | `/health` | Backend health status    |
-| `GET`  | `/docs`   | Swagger UI documentation |
+- Argon2 password hashing and JWT protection cover analysis and history routes.
+- History reads/deletes are scoped to the authenticated user.
+- Upload signatures, containers, extensions, size, and empty content are checked.
+- In-process rate limiting protects registration, login, and resume operations.
+- CORS, database URLs, JWT keys, and model settings use environment variables.
+- Logs avoid resume contents and credentials; feedback evidence is bounded and
+  redacts common contact/address patterns.
 
-### Authentication
+Do not upload highly sensitive personal documents to an untrusted deployment.
+`localStorage` token storage is a known browser-side trade-off, not a claim of
+complete client-side security.
 
-| Method | Endpoint             | Purpose                         |
-| ------ | -------------------- | ------------------------------- |
-| `POST` | `/api/auth/register` | Create a user account           |
-| `POST` | `/api/auth/login`    | Authenticate and obtain a JWT   |
-| `GET`  | `/api/auth/me`       | Retrieve the authenticated user |
+## Performance engineering
 
-### Resume Analysis
+Implemented work includes lazy thread-safe model initialization, model reuse,
+static role embedding reuse, bounded process-local embedding caching, reduced
+repeated preprocessing, threadpool isolation for blocking semantic work,
+duplicate frontend-submission prevention, lightweight timing, and an indexed
+history migration. No unverified numerical improvement is claimed.
 
-| Method | Endpoint                      | Purpose                                 |
-| ------ | ----------------------------- | --------------------------------------- |
-| `POST` | `/api/resume/parse`           | Parse an uploaded resume                |
-| `POST` | `/api/resume/analyze`         | Compare a resume with a job description |
-| `POST` | `/api/resume/recommend-roles` | Recommend technical roles               |
-| `POST` | `/api/resume/improve`         | Generate resume-quality feedback        |
+## Limitations and roadmap
 
-### History
+### Completed
 
-| Method   | Endpoint                   | Purpose                          |
-| -------- | -------------------------- | -------------------------------- |
-| `GET`    | `/api/history`             | List the current user's analyses |
-| `GET`    | `/api/history/{record_id}` | Retrieve one saved analysis      |
-| `DELETE` | `/api/history/{record_id}` | Delete one saved analysis        |
+PDF/DOCX parsing, structured extraction, ATS-style and semantic guidance,
+explainable roles, deterministic feedback, authentication, private history,
+SQLite/PostgreSQL support, Compose, CI validation, hardening, performance work,
+and developer branding are implemented.
 
----
+### Planned
 
-## Example API Workflow
+OCR for image-only resumes, stronger PII detection, distributed rate limiting,
+measured production observability, and richer role-profile maintenance.
 
-### 1. Register
+### Optional future enhancements
 
-```bash
-curl -X POST "http://127.0.0.1:8000/api/auth/register" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Example User",
-    "email": "user@example.com",
-    "password": "replace-with-a-valid-password"
-  }'
-```
+Shared model infrastructure, broader accessibility review, additional document
+formats, and a carefully scoped secure token architecture could be evaluated.
 
-### 2. Log In
+Scores are educational and advisory. They are not official ATS decisions,
+recruiter validation, hiring probabilities, or guaranteed outcomes. Automatic
+generative rewriting and public cloud deployment are not claimed.
 
-```bash
-curl -X POST "http://127.0.0.1:8000/api/auth/login" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "password": "replace-with-a-valid-password"
-  }'
-```
+## Developer
 
-Copy the returned access token.
+**Anshuman Pattanayak** — AI & ML Expert, Artificial Intelligence Specialist
 
-### 3. Analyze a Resume
+Centurion University BBSR · B.Tech 4th Year
 
-```bash
-curl -X POST "http://127.0.0.1:8000/api/resume/analyze" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -F "file=@resume.pdf" \
-  -F "job_description=We are looking for a Python developer with FastAPI, SQL, machine learning, Git and API development experience."
-```
+- GitHub: <https://github.com/ItsAnshumanPattanayak>
+- Email: <mailto:anshumanpattanayak931@gmail.com>
 
-### 4. View History
+## License and disclaimer
 
-```bash
-curl "http://127.0.0.1:8000/api/history" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
-```
-
----
-
-## File Validation
-
-Uploaded resumes are checked for:
-
-* a valid filename;
-* a supported extension;
-* non-empty file content;
-* configured maximum file size;
-* a PDF or DOCX content signature matching the extension;
-* extractable text.
-
-The default maximum upload size is:
-
-```text
-5 MB
-```
-
-Unsupported formats return an appropriate API error.
-
-Uploaded files are read only up to the configured size limit and are not
-deliberately persisted by the application. Original analysis results are
-stored in the authenticated user's history, however, and may contain personal
-information or extracted resume text until the user deletes the record.
-
----
-
-## Rate Limiting
-
-Registration, login, parsing, analysis, role recommendation and improvement
-endpoints use configurable application-level rate limits. The defaults use a
-60-second window with limits of 5 registration requests, 10 login requests and
-10 resume-processing requests per client address.
-
-The limiter can be configured with the `RATE_LIMIT_*` environment variables
-shown above. It returns HTTP `429` with a `Retry-After` header when a limit is
-exceeded.
-
-The limiter is stored in each backend process. Counters are not shared across
-multiple replicas and it is not a replacement for gateway-level or distributed
-rate limiting.
-
----
-
-## Security Notes
-
-Before using the application outside local development:
-
-1. Generate a unique JWT secret; never reuse an example or commit `.env` files.
-2. Use a production database configuration.
-3. Restrict CORS to trusted frontend domains.
-4. Disable debug mode.
-5. Serve both frontend and backend over HTTPS.
-6. Avoid logging resume content or personal information.
-7. Review data-retention requirements for uploaded resume information.
-8. Add production monitoring and gateway-level abuse protection.
-9. Store secrets in the deployment platform's secret manager.
-10. Review authentication and dependency security before public deployment.
-
-The repository contains development-oriented defaults and is not presented as a production-hardened deployment.
-
-The frontend stores its bearer token in browser `localStorage`. This preserves
-the current client architecture but means a successful same-origin XSS attack
-could read the token. The application does not use secure-cookie authentication
-and `localStorage` should not be treated as a fully secure credential store.
-
-Docker Compose binds PostgreSQL and the direct backend port to the local host.
-The frontend and backend containers run without application-level root
-privileges. For production, set `CORS_ORIGINS` to the exact trusted frontend
-origins; localhost wildcard matching is disabled in the production Compose
-configuration.
-
----
-
-## Known Limitations
-
-* Only PDF and DOCX files are accepted.
-* Image-only and scanned resumes are not processed because OCR is absent.
-* Results depend on successful text extraction from the uploaded document.
-* Skill extraction is limited to the project's configured skill vocabulary and matching rules.
-* Role recommendations are limited to predefined repository data.
-* ATS scoring is an internal explainable approximation, not a commercial ATS result.
-* Semantic analysis requires the configured Sentence Transformer model.
-* The initial semantic-model download can require an internet connection.
-* Resume improvement feedback is rule-based and does not rewrite the resume automatically.
-* The project does not fetch current job openings or real-time labour-market information.
-* Railway deployment preparation is documented, but no hosted frontend or backend deployment is included in the repository.
-* CI validates tests and Docker builds but does not deploy the application.
-* Frontend automated test coverage is smaller than the backend test suite.
-
----
-
-## Responsible Use
-
-Resume analysis should assist human judgment rather than replace it.
-
-Do not use the output to:
-
-* misrepresent experience;
-* add skills the candidate does not possess;
-* fabricate achievements;
-* automatically reject candidates;
-* make employment decisions without human review.
-
-Users should verify every recommendation before changing their resume.
-
----
-
-## Development Roadmap
-
-The following are possible future improvements and are **not currently claimed as completed**:
-
-* OCR for scanned resumes;
-* broader frontend test coverage;
-* completed and verified hosted deployment;
-* password reset and email verification;
-* refresh-token support;
-* configurable skill and role administration;
-* exportable PDF analysis reports;
-* optional AI-assisted rewriting with user review;
-* accessibility and mobile-interface improvements;
-* expanded observability and rate limiting.
-
----
-
-## Contributing
-
-Contributions are welcome.
-
-1. Fork the repository.
-2. Create a branch:
-
-```bash
-git checkout -b feature/your-feature-name
-```
-
-3. Make and test your changes.
-4. Commit using a clear message:
-
-```bash
-git commit -m "Add: description of the change"
-```
-
-5. Push the branch:
-
-```bash
-git push origin feature/your-feature-name
-```
-
-6. Open a pull request describing:
-
-   * the problem addressed;
-   * the implementation;
-   * tests performed;
-   * any configuration changes.
-
-Please avoid documenting planned functionality as though it is already implemented.
-
----
-
-## License
-
-This project is distributed under the license included in the [`LICENSE`](LICENSE) file.
-
----
-
-## Author
-
-**Anshuman Pattanayak**
-
-GitHub: [@ItsAnshumanPattanayak](https://github.com/ItsAnshumanPattanayak)
-
-Repository: [AI-Resume-Analyzer](https://github.com/ItsAnshumanPattanayak/AI-Resume-Analyzer)
-
----
-
-<div align="center">
-
-Built as a practical full-stack NLP and machine-learning project for transparent resume analysis.
-
-⭐ Consider starring the repository if you find it useful.
-
-</div>
+This project is distributed under [LICENSE](LICENSE). Analysis results are
+educational and advisory, not guaranteed hiring outcomes or official ATS
+decisions. Verify suggestions and provide only truthful resume information.

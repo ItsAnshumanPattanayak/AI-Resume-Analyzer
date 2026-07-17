@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">AI Resume Analyzer system architecture</title>
+  <desc id="desc">A layered view from the user and React frontend through the FastAPI application services to SQL persistence, with model, migration, Docker, and CI connections.</desc>
+  <defs><linearGradient id="surface" x1="0" x2="1"><stop stop-color="#182b4b"/><stop offset="1" stop-color="#102039"/></linearGradient><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#65e0c4"/></marker></defs>
+  <rect width="1200" height="900" fill="#08111f"/>
+  <text x="60" y="58" fill="#e7edf7" font-family="Arial,sans-serif" font-size="30" font-weight="700">AI Resume Analyzer</text>
+  <text x="60" y="88" fill="#9eacc0" font-family="Arial,sans-serif" font-size="16">Full-stack request, analysis, persistence, and delivery layers</text>
+  <g font-family="Arial,sans-serif" text-anchor="middle">
+    <rect x="390" y="120" width="420" height="64" rx="14" fill="url(#surface)" stroke="#6679ff"/><text x="600" y="159" fill="#fff" font-size="20" font-weight="700">User / browser</text>
+    <rect x="300" y="230" width="600" height="90" rx="16" fill="url(#surface)" stroke="#65e0c4"/><text x="600" y="267" fill="#fff" font-size="20" font-weight="700">React + Vite frontend</text><text x="600" y="293" fill="#b8c6d9" font-size="14">Auth context · upload modes · results · private history</text>
+    <rect x="300" y="365" width="600" height="90" rx="16" fill="url(#surface)" stroke="#65e0c4"/><text x="600" y="402" fill="#fff" font-size="20" font-weight="700">FastAPI API</text><text x="600" y="428" fill="#b8c6d9" font-size="14">JWT authentication · validation · rate limits · request orchestration</text>
+    <rect x="140" y="505" width="920" height="130" rx="18" fill="#102039" stroke="#6679ff"/><text x="600" y="538" fill="#fff" font-size="19" font-weight="700">Application services</text>
+    <text x="260" y="578" fill="#b8c6d9" font-size="14">Parser / extractor</text><text x="440" y="578" fill="#b8c6d9" font-size="14">Skills / ATS</text><text x="620" y="578" fill="#b8c6d9" font-size="14">Semantic analyzer</text><text x="800" y="578" fill="#b8c6d9" font-size="14">Role recommender</text><text x="960" y="578" fill="#b8c6d9" font-size="14">Resume advisor</text>
+    <rect x="300" y="705" width="600" height="80" rx="16" fill="url(#surface)" stroke="#65e0c4"/><text x="600" y="739" fill="#fff" font-size="20" font-weight="700">SQLAlchemy + Alembic persistence</text><text x="600" y="765" fill="#b8c6d9" font-size="14">PostgreSQL in Compose/production preparation · SQLite locally and in CI</text>
+  </g>
+  <g stroke="#65e0c4" stroke-width="3" marker-end="url(#arrow)"><path d="M600 184v46"/><path d="M600 320v45"/><path d="M600 455v50"/><path d="M600 635v70"/></g>
+  <g font-family="Arial,sans-serif" font-size="14"><rect x="45" y="705" width="185" height="80" rx="12" fill="#132641" stroke="#435b8e"/><text x="137" y="738" text-anchor="middle" fill="#dfe5ff">Sentence Transformer</text><text x="137" y="761" text-anchor="middle" fill="#9eacc0">lazy model + bounded cache</text><path d="M230 745h65" stroke="#65e0c4" stroke-width="2" marker-end="url(#arrow)"/><rect x="970" y="705" width="185" height="80" rx="12" fill="#132641" stroke="#435b8e"/><text x="1062" y="738" text-anchor="middle" fill="#dfe5ff">Docker Compose</text><text x="1062" y="761" text-anchor="middle" fill="#9eacc0">frontend · backend · Postgres</text><path d="M970 745h-70" stroke="#65e0c4" stroke-width="2" marker-end="url(#arrow)"/></g>
+  <text x="600" y="850" fill="#8496af" text-anchor="middle" font-family="Arial,sans-serif" font-size="14">GitHub Actions validates backend, frontend, and Docker builds; it does not deploy.</text>
+</svg>
