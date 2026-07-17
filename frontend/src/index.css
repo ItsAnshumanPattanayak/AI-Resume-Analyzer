@@ -540,6 +540,79 @@ textarea:focus {
   border-top: 1px solid rgba(135, 155, 183, 0.12);
 }
 
+.role-skill-summary,
+.role-feedback {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.role-skill-summary > div,
+.role-feedback > div,
+.role-breakdown {
+  padding: 13px;
+  border: 1px solid rgba(137, 157, 188, 0.13);
+  border-radius: 12px;
+  background: rgba(7, 17, 30, 0.32);
+}
+
+.role-skill-summary h4,
+.role-feedback h4 {
+  margin: 0 0 10px;
+  color: #dfe5ff;
+  font-size: 0.8rem;
+}
+
+.skill-empty {
+  color: #8fa1bb;
+  font-size: 0.78rem;
+}
+
+.role-breakdown {
+  margin-top: 16px;
+  color: #b8c6d9;
+}
+
+.role-breakdown summary {
+  cursor: pointer;
+  color: #dfe5ff;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.role-breakdown dl {
+  display: grid;
+  gap: 9px;
+  margin: 13px 0 0;
+}
+
+.role-breakdown dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.role-breakdown dt {
+  color: #8fa1bb;
+}
+
+.role-breakdown dd {
+  margin: 0;
+  color: #dfe5ff;
+  font-weight: 700;
+}
+
+.role-feedback ul {
+  display: grid;
+  gap: 7px;
+  padding-left: 18px;
+  margin: 0;
+  color: #b8c6d9;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
 .recommendation {
   padding: 15px;
   border-left: 4px solid;
@@ -669,6 +742,16 @@ footer {
 
   .phrase-item {
     grid-template-columns: 1fr;
+  }
+
+  .role-skill-summary,
+  .role-feedback {
+    grid-template-columns: 1fr;
+  }
+
+  .role-breakdown dl div {
+    flex-direction: column;
+    gap: 3px;
   }
 }
 .mode-selector {

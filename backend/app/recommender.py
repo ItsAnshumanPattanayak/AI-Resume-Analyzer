@@ -51,6 +51,11 @@ SKILL_ALIASES = {
 }
 
 
+SKILL_MATCH_WEIGHT = 0.70
+SEMANTIC_MATCH_WEIGHT = 0.30
+MAX_EXPLANATION_SKILLS = 3
+
+
 @lru_cache(maxsize=1)
 def load_role_profiles() -> dict[str, dict[str, Any]]:
     """
@@ -114,6 +119,30 @@ def canonicalize_skill(skill: str) -> str:
     )
 
 
+def unique_skills(
+    skills: list[str],
+) -> list[str]:
+    """Return case-insensitive, alias-aware unique skills."""
+
+    unique_skill_map: dict[str, str] = {}
+
+    for skill in skills:
+        normalized_skill = canonicalize_skill(skill)
+        if normalized_skill and normalized_skill not in unique_skill_map:
+            unique_skill_map[normalized_skill] = skill.strip()
+
+    return sorted(
+        unique_skill_map.values(),
+        key=lambda item: (item.casefold(), item),
+    )
+
+
+def bounded_percentage(value: float) -> float:
+    """Round a percentage while keeping it within valid bounds."""
+
+    return round(max(0.0, min(float(value), 100.0)), 2)
+
+
 def extract_candidate_skills(
     resume_text: str,
 ) -> list[str]:
@@ -136,44 +165,49 @@ def calculate_role_skill_match(
 
     candidate_skill_map = {
         canonicalize_skill(skill): skill
-        for skill in candidate_skills
+        for skill in unique_skills(candidate_skills)
     }
 
-    required_skill_map = {
-        canonicalize_skill(skill): skill
-        for skill in required_skills
-    }
+    required_skill_map: dict[str, str] = {}
+    required_skill_keys: list[str] = []
+    for skill in required_skills:
+        canonical_skill = canonicalize_skill(skill)
+        if canonical_skill and canonical_skill not in required_skill_map:
+            required_skill_map[canonical_skill] = skill
+            required_skill_keys.append(canonical_skill)
 
     candidate_skill_keys = set(candidate_skill_map)
-    required_skill_keys = set(required_skill_map)
+    required_skill_key_set = set(required_skill_map)
 
     matched_keys = (
         candidate_skill_keys
-        .intersection(required_skill_keys)
+        .intersection(required_skill_key_set)
     )
 
     missing_keys = (
-        required_skill_keys
+        required_skill_key_set
         .difference(candidate_skill_keys)
     )
 
-    matched_skills = sorted(
-        [
-            required_skill_map[key]
-            for key in matched_keys
-        ],
-        key=str.lower,
-    )
+    matched_skills = [
+        required_skill_map[key]
+        for key in required_skill_keys
+        if key in matched_keys
+    ]
 
-    missing_skills = sorted(
-        [
-            required_skill_map[key]
-            for key in missing_keys
-        ],
-        key=str.lower,
-    )
+    missing_skills = [
+        required_skill_map[key]
+        for key in required_skill_keys
+        if key in missing_keys
+    ]
 
-    if required_skills:
+    candidate_relevant_skills = [
+        candidate_skill_map[key]
+        for key in required_skill_keys
+        if key in matched_keys
+    ]
+
+    if required_skill_keys:
         skill_match_percentage = (
             len(matched_keys)
             / len(required_skill_keys)
@@ -184,12 +218,11 @@ def calculate_role_skill_match(
     return {
         "matched_skills": matched_skills,
         "missing_skills": missing_skills,
+        "candidate_relevant_skills": candidate_relevant_skills,
         "matched_count": len(matched_skills),
         "required_count": len(required_skill_keys),
-        "skill_match_percentage": round(
-            skill_match_percentage,
-            2,
-        ),
+        "missing_count": len(missing_skills),
+        "skill_match_percentage": bounded_percentage(skill_match_percentage),
     }
 
 
@@ -305,6 +338,152 @@ def get_recommendation_level(
     return "Low fit"
 
 
+def semantic_alignment_label(semantic_score: float) -> str:
+    """Describe a measured semantic score without making a hiring claim."""
+
+    if semantic_score >= 70:
+        return "strong semantic alignment"
+    if semantic_score >= 40:
+        return "moderate semantic alignment"
+    return "limited semantic alignment"
+
+
+def build_score_components(
+    skill_score: float,
+    semantic_score: float,
+) -> dict[str, Any]:
+    """Build the exact, rounded values used for role ranking."""
+
+    exact_skill_score = bounded_percentage(skill_score)
+    bounded_semantic_score = bounded_percentage(semantic_score)
+    exact_weighted_score = round(
+        exact_skill_score * SKILL_MATCH_WEIGHT,
+        2,
+    )
+    semantic_weighted_score = round(
+        bounded_semantic_score * SEMANTIC_MATCH_WEIGHT,
+        2,
+    )
+    final_score = bounded_percentage(
+        exact_weighted_score + semantic_weighted_score
+    )
+
+    return {
+        "exact_skill_coverage": {
+            "score": exact_skill_score,
+            "weight": SKILL_MATCH_WEIGHT,
+            "weighted_score": exact_weighted_score,
+        },
+        "semantic_similarity": {
+            "score": bounded_semantic_score,
+            "weight": SEMANTIC_MATCH_WEIGHT,
+            "weighted_score": semantic_weighted_score,
+        },
+        "final_score": {"score": final_score},
+    }
+
+
+def build_strengths(
+    *,
+    matched_skills: list[str],
+    required_count: int,
+    skill_score: float,
+    semantic_score: float,
+) -> list[str]:
+    """Build concise strengths from measured role-match data."""
+
+    strengths: list[str] = []
+
+    if required_count and skill_score >= 60:
+        strengths.append(
+            f"Matches {len(matched_skills)} of {required_count} skills associated with this role."
+        )
+
+    if matched_skills:
+        strengths.append(
+            "Relevant skills include "
+            + ", ".join(matched_skills[:MAX_EXPLANATION_SKILLS])
+            + "."
+        )
+
+    if semantic_score >= 70:
+        strengths.append(
+            "The resume has strong semantic alignment with this role profile."
+        )
+
+    return strengths
+
+
+def build_improvement_areas(
+    *,
+    missing_skills: list[str],
+    skill_score: float,
+    semantic_score: float,
+) -> list[str]:
+    """Build neutral, actionable improvement areas from score inputs."""
+
+    improvement_areas: list[str] = []
+
+    if missing_skills:
+        improvement_areas.append(
+            "Consider strengthening "
+            + ", ".join(missing_skills[:MAX_EXPLANATION_SKILLS])
+            + "."
+        )
+
+    if skill_score < 40:
+        improvement_areas.append(
+            "Add evidence of more skills associated with this role where it reflects your experience."
+        )
+
+    if semantic_score < 40:
+        improvement_areas.append(
+            "Describe role-relevant projects or responsibilities more directly."
+        )
+
+    return improvement_areas
+
+
+def build_role_explanation(
+    *,
+    matched_skills: list[str],
+    missing_skills: list[str],
+    required_count: int,
+    semantic_score: float,
+) -> str:
+    """Summarize measured recommendation evidence in deterministic prose."""
+
+    if required_count:
+        skill_summary = (
+            f"Your resume matches {len(matched_skills)} of {required_count} skills associated with this role."
+        )
+    else:
+        skill_summary = "This role profile does not define required skills."
+
+    explanation_parts = [
+        skill_summary,
+        "The resume has "
+        + semantic_alignment_label(semantic_score)
+        + " with this role profile.",
+    ]
+
+    if matched_skills:
+        explanation_parts.append(
+            "Key matches: "
+            + ", ".join(matched_skills[:MAX_EXPLANATION_SKILLS])
+            + "."
+        )
+
+    if missing_skills:
+        explanation_parts.append(
+            "Consider strengthening "
+            + ", ".join(missing_skills[:MAX_EXPLANATION_SKILLS])
+            + "."
+        )
+
+    return " ".join(explanation_parts)
+
+
 def build_role_reason(
     role_name: str,
     matched_skills: list[str],
@@ -381,15 +560,14 @@ def recommend_job_roles(
             resume_text
         )
 
+    candidate_skills = unique_skills(candidate_skills)
+
     semantic_scores = calculate_role_semantic_scores(
         resume_text=resume_text,
         role_profiles=role_profiles,
     )
 
     recommendations = []
-
-    skill_weight = 0.70
-    semantic_weight = 0.30
 
     for role_name, profile in role_profiles.items():
         required_skills = profile.get(
@@ -407,16 +585,21 @@ def recommend_job_roles(
             0.0,
         )
 
-        overall_score = (
-            skill_result["skill_match_percentage"]
-            * skill_weight
-            + semantic_score
-            * semantic_weight
+        score_components = build_score_components(
+            skill_result["skill_match_percentage"],
+            semantic_score,
         )
-
-        overall_score = round(
-            max(0.0, min(overall_score, 100.0)),
-            2,
+        overall_score = score_components["final_score"]["score"]
+        strengths = build_strengths(
+            matched_skills=skill_result["matched_skills"],
+            required_count=skill_result["required_count"],
+            skill_score=skill_result["skill_match_percentage"],
+            semantic_score=semantic_score,
+        )
+        improvement_areas = build_improvement_areas(
+            missing_skills=skill_result["missing_skills"],
+            skill_score=skill_result["skill_match_percentage"],
+            semantic_score=semantic_score,
         )
 
         recommendations.append(
@@ -433,6 +616,11 @@ def recommend_job_roles(
                         "skill_match_percentage"
                     ]
                 ),
+                "exact_skill_match_percentage": (
+                    skill_result[
+                        "skill_match_percentage"
+                    ]
+                ),
                 "semantic_match_percentage": (
                     semantic_score
                 ),
@@ -441,6 +629,35 @@ def recommend_job_roles(
                 ),
                 "missing_skills": (
                     skill_result["missing_skills"]
+                ),
+                "candidate_relevant_skills": (
+                    skill_result[
+                        "candidate_relevant_skills"
+                    ]
+                ),
+                "total_required_skills": (
+                    skill_result["required_count"]
+                ),
+                "matched_skill_count": (
+                    skill_result["matched_count"]
+                ),
+                "missing_skill_count": (
+                    skill_result["missing_count"]
+                ),
+                "score_components": score_components,
+                "strengths": strengths,
+                "improvement_areas": improvement_areas,
+                "explanation": build_role_explanation(
+                    matched_skills=skill_result[
+                        "matched_skills"
+                    ],
+                    missing_skills=skill_result[
+                        "missing_skills"
+                    ],
+                    required_count=skill_result[
+                        "required_count"
+                    ],
+                    semantic_score=semantic_score,
                 ),
                 "role_description": profile.get(
                     "description",
@@ -482,8 +699,8 @@ def recommend_job_roles(
             candidate_skills
         ),
         "scoring_weights": {
-            "skills": skill_weight,
-            "semantic_similarity": semantic_weight,
+            "skills": SKILL_MATCH_WEIGHT,
+            "semantic_similarity": SEMANTIC_MATCH_WEIGHT,
         },
         "best_role": best_role,
         "recommended_roles": (

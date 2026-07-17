@@ -54,6 +54,7 @@ from app.schemas import (
     AnalysisHistoryDetail,
     AnalysisHistoryItem,
     DeleteHistoryResponse,
+    RoleRecommendationResponse,
     UserLoginRequest,
     UserRegisterRequest,
     UserResponse,
@@ -707,7 +708,8 @@ async def analyze_resume(
 
 
 @app.post(
-    "/api/resume/recommend-roles"
+    "/api/resume/recommend-roles",
+    response_model=RoleRecommendationResponse,
 )
 async def recommend_roles(
     request: Request,
