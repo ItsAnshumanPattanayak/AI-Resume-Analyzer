@@ -63,6 +63,7 @@ backend/*.db-wal
 .env.*
 !.env.example
 !.env.docker.example
+!backend/.env.production.example
 
 backend/.env
 frontend/.env
