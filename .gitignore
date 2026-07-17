@@ -58,3 +58,14 @@ backend/*.db-journal
 backend/*.db-shm
 backend/*.db-wal
 .env.docker
+
+.env
+.env.*
+!.env.example
+!.env.docker.example
+
+backend/.env
+frontend/.env
+
+postgres_data/
+model_cache/
